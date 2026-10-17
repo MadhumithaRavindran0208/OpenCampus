@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Documentation &mdash; {{ project.name }}{% endblock %}
+{% block content %}
+<p class="small muted"><a href="{{ url_for('projects.detail', slug=project.slug) }}">&larr; {{ project.name }}</a></p>
+<div class="section-header">
+    <h1>Documentation</h1>
+    {% if current_user %}<a href="{{ url_for('docs.new_doc', slug=project.slug) }}" class="btn btn-primary btn-sm">New document</a>{% endif %}
+</div>
+{% if docs %}
+<div class="card">
+    <ul class="list-plain">
+        {% for d in docs %}
+        <li class="flex-between">
+            <a href="{{ url_for('docs.view', slug=project.slug, doc_slug=d.slug) }}">{{ d.title }}</a>
+            <span class="pill pill-info">{{ d.doc_type }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% else %}
+<div class="empty-state">No documentation published yet. Onboarding guides and READMEs are what keep this project alive after its authors graduate &mdash; write the first one.</div>
+{% endif %}
+{% endblock %}

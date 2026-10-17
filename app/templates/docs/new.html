@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}New document &mdash; {{ project.name }}{% endblock %}
+{% block content %}
+<div class="card form-card">
+    <h1>Write documentation</h1>
+    <p class="muted small">for <a href="{{ url_for('projects.detail', slug=project.slug) }}">{{ project.name }}</a></p>
+    <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="title">Title</label>
+            <input type="text" id="title" name="title" value="{{ form.get('title', '') }}" required autofocus>
+        </div>
+        <div class="form-group">
+            <label for="doc_type">Type</label>
+            <select id="doc_type" name="doc_type">
+                {% for t in doc_types %}<option value="{{ t }}" {% if form.get('doc_type') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="content_md">Content (Markdown supported)</label>
+            <textarea id="content_md" name="content_md" style="min-height:260px;" placeholder="Explain setup steps, architecture, or how to make a first contribution...">{{ form.get('content_md', '') }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Publish document</button>
+    </form>
+</div>
+{% endblock %}

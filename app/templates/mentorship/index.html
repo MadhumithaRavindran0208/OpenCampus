@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Mentorship &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<h1>Mentorship</h1>
+<p class="muted">Request guidance on a project's page, or manage requests here if you're a mentor or maintainer.</p>
+
+<div class="section-header"><h2>Your requests</h2></div>
+{% if as_student %}
+<div class="card">
+    <table>
+        <thead><tr><th>Project</th><th>Mentor</th><th>Status</th><th>Requested</th></tr></thead>
+        <tbody>
+        {% for r in as_student %}
+            <tr>
+                <td><a href="{{ url_for('projects.detail', slug=r.project_slug) }}">{{ r.project_name }}</a></td>
+                <td class="small muted">{{ r.mentor_name or '&mdash;' }}</td>
+                <td><span class="pill pill-{{ r.status }}">{{ r.status }}</span></td>
+                <td class="small muted">{{ r.created_at }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">You haven't requested mentorship yet. Visit a project page to request one.</div>
+{% endif %}
+
+{% if current_user.role in ('mentor', 'club_admin', 'platform_admin') %}
+<div class="section-header"><h2>Requests to review</h2></div>
+{% if as_mentor %}
+<div class="card">
+    <table>
+        <thead><tr><th>Student</th><th>Project</th><th>Message</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for r in as_mentor %}
+            <tr>
+                <td>{{ r.student_name }}</td>
+                <td><a href="{{ url_for('projects.detail', slug=r.project_slug) }}">{{ r.project_name }}</a></td>
+                <td class="small muted">{{ r.message[:60] }}</td>
+                <td><span class="pill pill-{{ r.status }}">{{ r.status }}</span></td>
+                <td style="white-space:nowrap;">
+                    {% if r.status == 'pending' %}
+                    <form method="post" action="{{ url_for('mentorship.accept', request_id=r.id) }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary">Accept</button>
+                    </form>
+                    <form method="post" action="{{ url_for('mentorship.decline', request_id=r.id) }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger">Decline</button>
+                    </form>
+                    {% elif r.status == 'accepted' %}
+                    <form method="post" action="{{ url_for('mentorship.complete', request_id=r.id) }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-ghost">Mark complete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">No mentorship requests to review right now.</div>
+{% endif %}
+{% endif %}
+{% endblock %}

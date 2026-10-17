@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Notifications &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<h1>Notifications</h1>
+{% if notifications %}
+<div class="card">
+    <ul class="list-plain">
+        {% for n in notifications %}
+        <li>
+            <a href="{{ url_for('notifications.open_notification', notification_id=n.id) }}" style="text-decoration:none; color:inherit;">
+                <div class="flex-between">
+                    <span>{{ n.message }}</span>
+                    <span class="small muted">{{ n.created_at }}</span>
+                </div>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% else %}
+<div class="empty-state">You're all caught up &mdash; no notifications yet.</div>
+{% endif %}
+{% endblock %}

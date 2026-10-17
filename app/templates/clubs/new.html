@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Start a club &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="card form-card">
+    <h1>Start a club</h1>
+    <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="name">Club name</label>
+            <input type="text" id="name" name="name" value="{{ form.get('name', '') }}" required autofocus>
+        </div>
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" placeholder="What does this club focus on?">{{ form.get('description', '') }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Create club</button>
+    </form>
+</div>
+{% endblock %}

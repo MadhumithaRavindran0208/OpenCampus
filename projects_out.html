@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects &mdash; OpenCampus OSS</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container navbar-inner">
+            <a href="/" class="brand">
+                <span class="brand-mark">OC</span>
+                <span class="brand-text">OpenCampus <em>OSS</em></span>
+            </a>
+
+            <form class="nav-search" action="/search/" method="get">
+                <input type="search" name="q" placeholder="Search projects, issues, docs..." value="">
+            </form>
+
+            <div class="nav-links">
+                <a href="/clubs/">Clubs</a>
+                <a href="/projects/">Projects</a>
+                <a href="/announcements/">Announcements</a>
+                
+                    <a href="/auth/login">Sign in</a>
+                    <a href="/auth/register" class="btn btn-primary">Join</a>
+                
+            </div>
+        </div>
+    </nav>
+
+    <main class="container page">
+        
+            
+        
+
+        
+<div class="section-header">
+    <h1>Projects</h1>
+    
+</div>
+
+<form method="get" class="card" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:20px;">
+    <div class="form-group" style="flex:2; min-width:200px; margin-bottom:0;">
+        <label for="q">Keyword</label>
+        <input type="text" id="q" name="q" value="" placeholder="Search name, description, tech stack">
+    </div>
+    <div class="form-group" style="min-width:160px; margin-bottom:0;">
+        <label for="difficulty">Difficulty</label>
+        <select id="difficulty" name="difficulty">
+            <option value="">Any</option>
+            <option value="beginner" >beginner</option><option value="intermediate" >intermediate</option><option value="advanced" >advanced</option>
+        </select>
+    </div>
+    <div class="form-group" style="min-width:160px; margin-bottom:0;">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+            <option value="">Any</option>
+            <option value="active" >active</option><option value="seeking_maintainer" >seeking maintainer</option><option value="maintenance" >maintenance</option><option value="archived" >archived</option>
+        </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600;">
+            <input type="checkbox" name="seeking" value="1" style="width:auto;" >
+            Help Wanted only
+        </label>
+    </div>
+    <button type="submit" class="btn btn-ghost">Filter</button>
+</form>
+
+
+<div class="card-grid">
+    
+    <a href="/projects/campusconnect" style="text-decoration:none; color:inherit;">
+        <div class="card card-hover">
+            <div class="card-title-row">
+                <h3 style="margin:0;">CampusConnect</h3>
+                <span class="pill pill-beginner">beginner</span>
+            </div>
+            
+            <p class="small muted">Computer Science Society</p>
+            <p class="small">A directory app connecting students with clubs, events, and study groups.</p>
+            
+            <div style="margin-bottom:8px;">
+                <span class="tag">Python</span><span class="tag">Flask</span><span class="tag">SQLite</span>
+            </div>
+            
+            <div class="meta-row">
+                <span class="pill pill-active">active</span>
+                <span>0 open issues</span>
+            </div>
+        </div>
+    </a>
+    
+    <a href="/projects/gradetracker-cli" style="text-decoration:none; color:inherit;">
+        <div class="card card-hover">
+            <div class="card-title-row">
+                <h3 style="margin:0;">GradeTracker CLI</h3>
+                <span class="pill pill-intermediate">intermediate</span>
+            </div>
+            
+            <p class="small muted">Computer Science Society</p>
+            <p class="small">A command-line tool for students to log and visualize their semester grades.</p>
+            
+            <div style="margin-bottom:8px;">
+                <span class="tag">Python</span><span class="tag">Click</span><span class="tag">Matplotlib</span>
+            </div>
+            
+            <div class="meta-row">
+                <span class="pill pill-active">active</span>
+                <span>0 open issues</span>
+            </div>
+        </div>
+    </a>
+    
+    <a href="/projects/line-follower-firmware" style="text-decoration:none; color:inherit;">
+        <div class="card card-hover">
+            <div class="card-title-row">
+                <h3 style="margin:0;">Line Follower Firmware</h3>
+                <span class="pill pill-advanced">advanced</span>
+            </div>
+            
+            <p class="small muted">Robotics Club</p>
+            <p class="small">Firmware for a line-following robot used in the annual robotics workshop.</p>
+            
+            <div style="margin-bottom:8px;">
+                <span class="tag">C++</span><span class="tag">PlatformIO</span><span class="tag">Arduino</span>
+            </div>
+            
+            <div class="meta-row">
+                <span class="pill pill-seeking_maintainer">seeking maintainer</span>
+                <span>1 open issue</span>
+            </div>
+        </div>
+    </a>
+    
+</div>
+
+
+    </main>
+
+    <footer class="footer">
+        <div class="container footer-inner">
+            <span>OpenCampus OSS &mdash; knowledge that outlives contributors.</span>
+            <span class="footer-muted">Built for campus technical communities.</span>
+        </div>
+    </footer>
+</body>
+</html>

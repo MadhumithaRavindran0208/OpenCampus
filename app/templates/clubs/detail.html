@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ club.name }} &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+{% if club.status == 'pending' %}
+<div class="flash flash-warning" style="margin-bottom:20px;">This club is awaiting admin approval and isn't publicly listed yet.</div>
+{% elif club.status == 'rejected' %}
+<div class="flash flash-danger" style="margin-bottom:20px;">This club's approval request was not accepted.</div>
+{% endif %}
+<div class="flex-between" style="align-items:flex-start;">
+    <div>
+        <h1>{{ club.name }}</h1>
+        <p class="muted">{{ club.description }}</p>
+    </div>
+    {% if current_user and not is_member %}
+    <form method="post" action="{{ url_for('clubs.join', slug=club.slug) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary">Join club</button>
+    </form>
+    {% elif is_member %}
+        <span class="pill pill-success">Member</span>
+    {% endif %}
+</div>
+
+<div class="section-header">
+    <h2>Projects</h2>
+    {% if current_user %}<a href="{{ url_for('projects.new_project') }}" class="btn btn-ghost btn-sm">New project</a>{% endif %}
+</div>
+{% if projects %}
+<div class="card-grid">
+    {% for p in projects %}
+    <a href="{{ url_for('projects.detail', slug=p.slug) }}" style="text-decoration:none; color:inherit;">
+        <div class="card card-hover">
+            <div class="card-title-row">
+                <h3 style="margin:0;">{{ p.name }}</h3>
+                <span class="pill pill-{{ p.difficulty }}">{{ p.difficulty }}</span>
+            </div>
+            {% if p.is_seeking_contributors %}<span class="pill pill-help-wanted">Help Wanted</span>{% endif %}
+            <p class="small muted">{{ p.description[:100] }}{% if p.description|length > 100 %}&hellip;{% endif %}</p>
+            <div class="meta-row">
+                <span class="pill pill-{{ p.status }}">{{ p.status.replace('_',' ') }}</span>
+                <span>{{ p.open_issue_count }} open issue{{ 's' if p.open_issue_count != 1 else '' }}</span>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">No projects in this club yet.</div>
+{% endif %}
+
+<div class="section-header"><h2>Members ({{ members|length }})</h2></div>
+<div class="card">
+    <table>
+        <thead><tr><th>Name</th><th>Club role</th><th>Joined</th></tr></thead>
+        <tbody>
+        {% for m in members %}
+            <tr>
+                <td><a href="{{ url_for('auth.view_profile', user_id=m.id) }}">{{ m.full_name }}</a></td>
+                <td><span class="pill pill-info">{{ m.club_role }}</span></td>
+                <td class="muted small">{{ m.joined_at }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

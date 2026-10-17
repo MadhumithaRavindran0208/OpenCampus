@@ -1,0 +1,16 @@
+# 1. Unzip and enter the project
+unzip opencampus-oss.zip
+cd opencampus-oss
+
+# 2. (Recommended) create a virtual environment
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
+# 3. Install dependencies (just Flask + 3 small libs, no build tools needed)
+pip install -r requirements.txt
+
+# 4. (Optional but recommended) populate demo data
+python scripts/seed_data.py
+
+# 5. Start the server
+python run.py

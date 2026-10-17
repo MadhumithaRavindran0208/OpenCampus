@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Ownership transfers &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<p class="small muted"><a href="{{ url_for('admin.dashboard') }}">&larr; Admin dashboard</a></p>
+<h1>Pending ownership transfers</h1>
+{% if transfers %}
+<div class="card">
+    <table>
+        <thead><tr><th>Project</th><th>From</th><th>To</th><th>Requested</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for t in transfers %}
+            <tr>
+                <td><a href="{{ url_for('projects.detail', slug=t.project_slug) }}">{{ t.project_name }}</a></td>
+                <td>{{ t.from_name }}</td>
+                <td>{{ t.to_name }}</td>
+                <td class="small muted">{{ t.created_at }}</td>
+                <td style="white-space:nowrap;">
+                    <form method="post" action="{{ url_for('admin.resolve_transfer', transfer_id=t.id) }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="decision" value="accept">
+                        <button type="submit" class="btn btn-sm btn-primary">Approve</button>
+                    </form>
+                    <form method="post" action="{{ url_for('admin.resolve_transfer', transfer_id=t.id) }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="decision" value="reject">
+                        <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">No pending ownership transfers.</div>
+{% endif %}
+{% endblock %}

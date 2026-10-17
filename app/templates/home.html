@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}OpenCampus OSS{% endblock %}
+{% block content %}
+<section class="hero">
+    <h1>Knowledge that outlives contributors.</h1>
+    <p>OpenCampus OSS is a campus collaboration platform where student projects, documentation, and mentorship
+        survive graduating batches. Discover a project, claim your first issue, and build a public contribution history.</p>
+    {% if not current_user %}
+        <a href="{{ url_for('auth.register') }}" class="btn btn-primary">Get started</a>
+        <a href="{{ url_for('projects.index') }}" class="btn btn-ghost">Browse projects</a>
+    {% else %}
+        <a href="{{ url_for('projects.index') }}" class="btn btn-primary">Browse projects</a>
+        <a href="{{ url_for('clubs.index') }}" class="btn btn-ghost">See clubs</a>
+    {% endif %}
+</section>
+
+<div class="section-header">
+    <h2>Active projects</h2>
+    <a href="{{ url_for('projects.index') }}">View all &rarr;</a>
+</div>
+{% if projects %}
+<div class="card-grid">
+    {% for p in projects %}
+    <a href="{{ url_for('projects.detail', slug=p.slug) }}" style="text-decoration:none; color:inherit;">
+        <div class="card card-hover">
+            <div class="card-title-row">
+                <h3 style="margin:0;">{{ p.name }}</h3>
+                <span class="pill pill-{{ p.difficulty }}">{{ p.difficulty }}</span>
+            </div>
+            {% if p.is_seeking_contributors %}<span class="pill pill-help-wanted">Help Wanted</span>{% endif %}
+            <p class="muted small">{{ p.club_name }}</p>
+            <p class="small">{{ p.description[:120] }}{% if p.description|length > 120 %}&hellip;{% endif %}</p>
+            <div class="meta-row">
+                <span class="pill pill-{{ p.status }}">{{ p.status.replace('_',' ') }}</span>
+                <span>{{ p.open_issue_count }} open issue{{ 's' if p.open_issue_count != 1 else '' }}</span>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">No active projects yet &mdash; be the first to <a href="{{ url_for('projects.new_project') }}">start one</a>.</div>
+{% endif %}
+
+<div class="section-header">
+    <h2>Recent announcements</h2>
+    <a href="{{ url_for('announcements.index') }}">View all &rarr;</a>
+</div>
+{% if announcements %}
+<div class="card">
+    <ul class="list-plain">
+        {% for a in announcements %}
+        <li>
+            <div class="flex-between">
+                <strong>{{ a.title }}</strong>
+                <span class="small muted">{{ a.created_at }}</span>
+            </div>
+            <p class="small muted" style="margin:4px 0 0;">{{ a.body[:140] }}{% if a.body|length > 140 %}&hellip;{% endif %}</p>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% else %}
+<div class="empty-state">No announcements yet.</div>
+{% endif %}
+{% endblock %}

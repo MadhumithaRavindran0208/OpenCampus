@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Search{% if query %}: {{ query }}{% endif %} &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<h1>Search {% if query %}results for &ldquo;{{ query }}&rdquo;{% endif %}</h1>
+
+{% if not query %}
+<div class="empty-state">Type something in the search bar above to get started.</div>
+{% else %}
+
+<div class="section-header"><h2>Projects ({{ results.projects|length }})</h2></div>
+{% if results.projects %}
+<ul class="list-plain">
+    {% for p in results.projects %}
+    <li><a href="{{ url_for('projects.detail', slug=p.slug) }}">{{ p.name }}</a>
+        <span class="small muted">&mdash; {{ p.description[:90] }}</span></li>
+    {% endfor %}
+</ul>
+{% else %}<p class="muted small">No matching projects.</p>{% endif %}
+
+<div class="section-header"><h2>Issues ({{ results.issues|length }})</h2></div>
+{% if results.issues %}
+<ul class="list-plain">
+    {% for i in results.issues %}
+    <li><a href="{{ url_for('issues.detail', issue_id=i.id) }}">{{ i.title }}</a>
+        <span class="small muted">&mdash; {{ i.project_name }} &middot; {{ i.status }}</span></li>
+    {% endfor %}
+</ul>
+{% else %}<p class="muted small">No matching issues.</p>{% endif %}
+
+<div class="section-header"><h2>Documentation ({{ results.docs|length }})</h2></div>
+{% if results.docs %}
+<ul class="list-plain">
+    {% for d in results.docs %}
+    <li><a href="{{ url_for('docs.view', slug=d.project_slug, doc_slug=d.doc_slug) }}">{{ d.title }}</a>
+        <span class="small muted">&mdash; {{ d.project_name }}</span></li>
+    {% endfor %}
+</ul>
+{% else %}<p class="muted small">No matching documentation.</p>{% endif %}
+
+<div class="section-header"><h2>Clubs ({{ results.clubs|length }})</h2></div>
+{% if results.clubs %}
+<ul class="list-plain">
+    {% for c in results.clubs %}
+    <li><a href="{{ url_for('clubs.detail', slug=c.slug) }}">{{ c.name }}</a>
+        <span class="small muted">&mdash; {{ c.description[:90] }}</span></li>
+    {% endfor %}
+</ul>
+{% else %}<p class="muted small">No matching clubs.</p>{% endif %}
+
+{% endif %}
+{% endblock %}

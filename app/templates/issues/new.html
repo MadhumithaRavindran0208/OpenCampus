@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}New issue &mdash; {{ project.name }}{% endblock %}
+{% block content %}
+<div class="card form-card">
+    <h1>Open an issue</h1>
+    <p class="muted small">on <a href="{{ url_for('projects.detail', slug=project.slug) }}">{{ project.name }}</a></p>
+    <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="title">Title</label>
+            <input type="text" id="title" name="title" value="{{ form.get('title', '') }}" required autofocus>
+        </div>
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" placeholder="What needs to be done? Include enough context for a first-time contributor.">{{ form.get('description', '') }}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="difficulty">Difficulty</label>
+            <select id="difficulty" name="difficulty">
+                {% for d in difficulties %}<option value="{{ d }}" {% if form.get('difficulty') == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Open issue</button>
+    </form>
+</div>
+{% endblock %}

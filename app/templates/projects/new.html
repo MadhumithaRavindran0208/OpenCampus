@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}New project &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="card form-card">
+    <h1>Start a project</h1>
+    {% if not clubs %}
+        <p class="muted">You'll need a club first. <a href="{{ url_for('clubs.new_club') }}">Create one</a>.</p>
+    {% else %}
+    <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="club_id">Club</label>
+            <select id="club_id" name="club_id" required>
+                {% for c in clubs %}<option value="{{ c.id }}" {% if form.get('club_id')|string == c.id|string %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="name">Project name</label>
+            <input type="text" id="name" name="name" value="{{ form.get('name', '') }}" required autofocus>
+        </div>
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" placeholder="What problem does this project solve?">{{ form.get('description', '') }}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="tech_stack">Tech stack (comma-separated)</label>
+            <input type="text" id="tech_stack" name="tech_stack" value="{{ form.get('tech_stack', '') }}" placeholder="Python, Flask, SQLite">
+        </div>
+        <div class="form-group">
+            <label for="repo_url">Repository URL (optional)</label>
+            <input type="text" id="repo_url" name="repo_url" value="{{ form.get('repo_url', '') }}" placeholder="https://github.com/...">
+        </div>
+        <div class="form-group">
+            <label for="difficulty">Difficulty</label>
+            <select id="difficulty" name="difficulty">
+                {% for d in difficulties %}<option value="{{ d }}" {% if form.get('difficulty') == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+            </select>
+        </div>
+        <hr class="divider">
+        <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+                <input type="checkbox" name="is_seeking_contributors" style="width:auto;" {% if form.get('is_seeking_contributors') == 'on' %}checked{% endif %}>
+                This project urgently needs contributors (Help Wanted)
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="required_skills">Skills needed (comma-separated)</label>
+            <input type="text" id="required_skills" name="required_skills" value="{{ form.get('required_skills', '') }}" placeholder="React, PostgreSQL, UI design">
+            <div class="help-text">Only shown if "Help Wanted" is checked above.</div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Create project</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

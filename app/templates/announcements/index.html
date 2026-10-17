@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Announcements &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="section-header">
+    <h1>Announcements</h1>
+    {% if current_user %}<a href="{{ url_for('announcements.new') }}" class="btn btn-primary btn-sm">Post announcement</a>{% endif %}
+</div>
+{% if announcements %}
+<div class="card">
+    <ul class="list-plain">
+        {% for a in announcements %}
+        <li>
+            <div class="flex-between">
+                <strong>{{ a.title }}</strong>
+                <span class="small muted">{{ a.created_at }}</span>
+            </div>
+            <p class="small muted" style="margin:4px 0;">
+                by {{ a.author_name }}{% if a.club_name %} &middot; {{ a.club_name }}{% else %} &middot; platform-wide{% endif %}
+            </p>
+            <p style="margin:0;">{{ a.body }}</p>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% else %}
+<div class="empty-state">No announcements yet.</div>
+{% endif %}
+{% endblock %}

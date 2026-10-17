@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Admin dashboard &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<h1>Platform administration</h1>
+<div class="meta-row" style="margin-bottom:20px;">
+    <a href="{{ url_for('admin.users') }}" class="btn btn-ghost btn-sm">Manage users</a>
+    <a href="{{ url_for('admin.transfers') }}" class="btn btn-ghost btn-sm">Ownership transfers ({{ stats.pending_transfers }})</a>
+    <a href="{{ url_for('admin.clubs') }}" class="btn btn-ghost btn-sm">Club approvals ({{ stats.pending_clubs }})</a>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-box"><div class="stat-number">{{ stats.active_users }}</div><div class="stat-label">Active users</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.clubs }}</div><div class="stat-label">Clubs</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.projects }}</div><div class="stat-label">Projects</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.projects_seeking_maintainer }}</div><div class="stat-label">Seeking maintainer</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.projects_seeking_contributors }}</div><div class="stat-label">Help Wanted</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.open_issues }}</div><div class="stat-label">Open issues</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.closed_issues }}</div><div class="stat-label">Closed issues</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.pending_mentorships }}</div><div class="stat-label">Pending mentorships</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.completed_mentorships }}</div><div class="stat-label">Completed mentorships</div></div>
+    <div class="stat-box"><div class="stat-number">{{ stats.pending_clubs }}</div><div class="stat-label">Clubs awaiting approval</div></div>
+</div>
+
+<div class="section-header"><h2>Top contributors</h2></div>
+{% if top_contributors %}
+<div class="card">
+    <table>
+        <thead><tr><th>#</th><th>Name</th><th>Points</th><th>Activities</th></tr></thead>
+        <tbody>
+        {% for c in top_contributors %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td><a href="{{ url_for('auth.view_profile', user_id=c.id) }}">{{ c.full_name }}</a></td>
+                <td>{{ c.total_points }}</td>
+                <td>{{ c.activity_count }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">No contribution activity logged yet.</div>
+{% endif %}
+
+<div class="section-header"><h2>Projects needing attention</h2></div>
+{% if attention %}
+<div class="card">
+    <table>
+        <thead><tr><th>Project</th><th>Status</th><th>Members</th></tr></thead>
+        <tbody>
+        {% for p in attention %}
+            <tr>
+                <td><a href="{{ url_for('projects.detail', slug=p.slug) }}">{{ p.name }}</a></td>
+                <td><span class="pill pill-{{ p.status }}">{{ p.status.replace('_',' ') }}</span></td>
+                <td>{{ p.member_count }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">Every project has healthy maintainer coverage right now.</div>
+{% endif %}
+{% endblock %}

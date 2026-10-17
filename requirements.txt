@@ -1,0 +1,24 @@
+# OpenCampus OSS runs on Flask + Python's built-in sqlite3 -- deliberately
+# minimal so the whole platform installs with one line and has almost no
+# dependency-version risk. See ARCHITECTURE.md (ADR-001).
+Flask==3.1.3
+Werkzeug==3.1.7
+Jinja2==3.1.6
+itsdangerous==2.2.0
+Markdown==3.10.2
+
+# Optional but recommended: a battle-tested Rust-based HTML sanitizer.
+# app/core/sanitize.py uses this automatically when it's installed, and
+# falls back to a hand-rolled (but tested -- see tests/test_sanitize.py)
+# stdlib sanitizer when it's not, so nothing breaks either way.
+nh3==0.3.2
+
+# Optional: waitress is a production-grade WSGI server. main.py uses it
+# automatically when OPENCAMPUS_ENV=production is set and it's
+# installed; without it, production mode falls back to the dev server
+# with a loud warning rather than failing outright.
+waitress==3.0.2
+
+# Testing uses Python's built-in unittest -- no separate test framework
+# dependency is required. Run tests with:
+#   python -m unittest discover -s tests

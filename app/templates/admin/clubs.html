@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Club approvals &mdash; Admin{% endblock %}
+{% block content %}
+<div class="section-header">
+    <h1>Pending club approvals</h1>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-ghost btn-sm">&larr; Dashboard</a>
+</div>
+{% if pending_clubs %}
+<div class="card">
+    <table>
+        <thead><tr><th>Club</th><th>Submitted by</th><th>Description</th><th>Submitted</th><th></th></tr></thead>
+        <tbody>
+        {% for c in pending_clubs %}
+            <tr>
+                <td>{{ c.name }}</td>
+                <td>{{ c.created_by_name }}</td>
+                <td class="small muted">{{ c.description[:80] }}</td>
+                <td class="small muted">{{ c.created_at }}</td>
+                <td style="white-space:nowrap;">
+                    <form method="post" action="{{ url_for('admin.approve_club', club_id=c.id) }}" style="display:inline;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+                    </form>
+                    <form method="post" action="{{ url_for('admin.reject_club', club_id=c.id) }}" style="display:inline;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">No clubs awaiting approval.</div>
+{% endif %}
+{% endblock %}

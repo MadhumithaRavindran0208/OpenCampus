@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ profile.user.full_name }} &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="flex-between" style="align-items:flex-start;">
+    <div>
+        <div class="meta-row" style="margin-bottom:4px;">
+            <span class="avatar-circle">{{ profile.user.full_name[0]|upper }}</span>
+            <h1 style="margin:0;">{{ profile.user.full_name }}</h1>
+            <span class="pill pill-info">{{ profile.user.role.replace('_',' ') }}</span>
+        </div>
+        <p class="muted small">{{ profile.user.email }} &middot; joined {{ profile.user.created_at }}</p>
+    </div>
+</div>
+
+{% if profile.user.bio %}<p>{{ profile.user.bio }}</p>{% endif %}
+{% if profile.user.skills %}
+<div style="margin-bottom:16px;">
+    {% for s in profile.user.skills.split(',') %}{% if s.strip() %}<span class="tag">{{ s.strip() }}</span>{% endif %}{% endfor %}
+</div>
+{% endif %}
+
+{% if profile.user.contact_email or profile.user.discord_handle or profile.user.linkedin_url or profile.user.github_url %}
+<div class="meta-row" style="margin-bottom:16px;">
+    {% if profile.user.contact_email %}<span class="pill pill-info">Email: {{ profile.user.contact_email }}</span>{% endif %}
+    {% if profile.user.discord_handle %}<span class="pill pill-info">Discord: {{ profile.user.discord_handle }}</span>{% endif %}
+    {% if profile.user.linkedin_url %}<a href="{{ profile.user.linkedin_url }}" target="_blank" rel="noopener" class="pill pill-info">LinkedIn</a>{% endif %}
+    {% if profile.user.github_url %}<a href="{{ profile.user.github_url }}" target="_blank" rel="noopener" class="pill pill-info">GitHub</a>{% endif %}
+</div>
+{% endif %}
+
+{% if is_self and profile.user.age_category %}
+<p class="small muted">Age category: {{ profile.user.age_category }} <span title="Only visible to you">(private)</span></p>
+{% endif %}
+
+<div class="section-header"><h2>Contribution history</h2></div>
+{% if profile.contributions %}
+<div class="stat-grid">
+    {% for c in profile.contributions %}
+    <div class="stat-box">
+        <div class="stat-number">{{ c.points }}</div>
+        <div class="stat-label">{{ c.activity_type.replace('_',' ') }} ({{ c.count }})</div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">No contributions logged yet &mdash; claim an issue or publish a doc to get started.</div>
+{% endif %}
+
+<div class="section-header"><h2>Projects</h2></div>
+{% if profile.projects %}
+<ul class="list-plain">
+    {% for p in profile.projects %}
+    <li class="flex-between">
+        <a href="{{ url_for('projects.detail', slug=p.slug) }}">{{ p.name }}</a>
+        <span class="pill pill-info">{{ p.role }}</span>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">Not part of any project yet.</div>
+{% endif %}
+
+{% if is_self %}
+<div class="section-header"><h2>Edit profile</h2></div>
+<div class="card form-card" style="margin-left:0;">
+    <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="full_name">Full name</label>
+            <input type="text" id="full_name" name="full_name" value="{{ profile.user.full_name }}">
+        </div>
+        <div class="form-group">
+            <label for="bio">Bio</label>
+            <textarea id="bio" name="bio">{{ profile.user.bio }}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="skills">Skills (comma-separated)</label>
+            <input type="text" id="skills" name="skills" value="{{ profile.user.skills }}" placeholder="Python, React, ML">
+        </div>
+        <div class="form-group">
+            <label for="age_category">Age category (private -- only visible to you)</label>
+            <select id="age_category" name="age_category">
+                <option value="">-- Not set --</option>
+                {% for cat in age_categories %}
+                <option value="{{ cat }}" {% if profile.user.age_category == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <hr class="divider">
+        <p class="small muted">Contact channels (optional) &mdash; shown on your profile and to project maintainers who need to reach you.</p>
+        <div class="form-group">
+            <label for="contact_email">Preferred contact email</label>
+            <input type="text" id="contact_email" name="contact_email" value="{{ profile.user.contact_email }}" placeholder="Leave blank to use your account email">
+        </div>
+        <div class="form-group">
+            <label for="discord_handle">Discord handle</label>
+            <input type="text" id="discord_handle" name="discord_handle" value="{{ profile.user.discord_handle }}" placeholder="username">
+        </div>
+        <div class="form-group">
+            <label for="linkedin_url">LinkedIn URL</label>
+            <input type="text" id="linkedin_url" name="linkedin_url" value="{{ profile.user.linkedin_url }}" placeholder="https://linkedin.com/in/...">
+        </div>
+        <div class="form-group">
+            <label for="github_url">GitHub URL</label>
+            <input type="text" id="github_url" name="github_url" value="{{ profile.user.github_url }}" placeholder="https://github.com/...">
+        </div>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

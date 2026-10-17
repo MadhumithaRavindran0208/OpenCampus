@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="flex-between" style="align-items:flex-start;">
+    <div>
+        <p class="small muted" style="margin-bottom:2px;"><a href="{{ url_for('clubs.detail', slug=project.club_slug) }}">{{ project.club_name }}</a></p>
+        <div class="meta-row" style="margin-bottom:8px;">
+            <h1 style="margin:0;">{{ project.name }}</h1>
+            <span class="pill pill-{{ project.difficulty }}">{{ project.difficulty }}</span>
+            <span class="pill pill-{{ project.status }}">{{ project.status.replace('_',' ') }}</span>
+            {% if project.is_seeking_contributors %}<span class="pill pill-help-wanted">Help Wanted</span>{% endif %}
+        </div>
+        <p class="muted">{{ project.description }}</p>
+        {% if project.is_seeking_contributors and project.required_skills %}
+        <p class="small"><strong>Skills needed:</strong> {{ project.required_skills }}</p>
+        {% endif %}
+        {% if project.tech_stack %}
+        <div>
+            {% for t in project.tech_stack.split(',') %}{% if t.strip() %}<span class="tag">{{ t.strip() }}</span>{% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% if project.repo_url %}<p class="small"><a href="{{ project.repo_url }}" target="_blank" rel="noopener">Repository &rarr;</a></p>{% endif %}
+    </div>
+    <div style="text-align:right; white-space:nowrap;">
+        {% if current_user and not is_member %}
+        <form method="post" action="{{ url_for('projects.join', slug=project.slug) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary">Join as contributor</button>
+        </form>
+        {% elif is_member %}
+            <span class="pill pill-success">Member</span>
+        {% endif %}
+        {% if current_user %}
+        <form method="post" action="{{ url_for('mentorship.request_mentorship', slug=project.slug) }}" style="margin-top:8px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="message" value="Requesting mentorship on {{ project.name }}">
+            <button type="submit" class="btn btn-ghost btn-sm">Request mentorship</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="stat-grid" style="margin:20px 0;">
+    <div class="stat-box"><div class="stat-number">{{ issue_stats.open }}</div><div class="stat-label">Open issues</div></div>
+    <div class="stat-box"><div class="stat-number">{{ issue_stats.in_progress }}</div><div class="stat-label">In progress</div></div>
+    <div class="stat-box"><div class="stat-number">{{ issue_stats.done }}</div><div class="stat-label">Completed</div></div>
+    <div class="stat-box"><div class="stat-number">{{ members|length }}</div><div class="stat-label">Members</div></div>
+</div>
+
+{% if is_maintainer %}
+<div class="card" style="margin-bottom:20px;">
+    <h3>Maintainer controls</h3>
+    <form method="post" action="{{ url_for('projects.change_status', slug=project.slug) }}" style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group" style="margin-bottom:0;">
+            <label for="status">Project status</label>
+            <select id="status" name="status">
+                {% for s in statuses %}<option value="{{ s }}" {% if project.status == s %}selected{% endif %}>{{ s.replace('_',' ') }}</option>{% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-ghost btn-sm">Update status</button>
+    </form>
+    <hr class="divider">
+    <form method="post" action="{{ url_for('projects.update_help_wanted', slug=project.slug) }}" style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group" style="margin-bottom:0;">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:600;">
+                <input type="checkbox" name="is_seeking_contributors" style="width:auto;" {% if project.is_seeking_contributors %}checked{% endif %}>
+                Mark Help Wanted
+            </label>
+        </div>
+        <div class="form-group" style="margin-bottom:0; min-width:220px;">
+            <label for="required_skills">Skills needed</label>
+            <input type="text" id="required_skills" name="required_skills" value="{{ project.required_skills }}" placeholder="React, PostgreSQL">
+        </div>
+        <button type="submit" class="btn btn-ghost btn-sm">Update</button>
+    </form>
+    <hr class="divider">
+    <form method="post" action="{{ url_for('projects.transfer_ownership', slug=project.slug) }}" style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group" style="margin-bottom:0; min-width:220px;">
+            <label for="to_user_id">Transfer ownership to</label>
+            <select id="to_user_id" name="to_user_id">
+                {% for m in members if m.id != current_user.id %}<option value="{{ m.id }}">{{ m.full_name }} ({{ m.role }})</option>{% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-ghost btn-sm">Request transfer</button>
+    </form>
+    <p class="help-text">Ownership transfers require the receiving member's context to already be a project member; an admin resolves the handover.</p>
+</div>
+{% endif %}
+
+{% if members | selectattr('role', 'in', ['owner', 'maintainer']) | list %}
+<div class="card" style="margin-bottom:20px;">
+    <h3 style="margin-bottom:10px;">Contact the maintainers</h3>
+    {% for m in members if m.role in ('owner', 'maintainer') %}
+        {% if m.contact_email or m.discord_handle or m.linkedin_url or m.github_url %}
+        <div class="meta-row" style="margin-bottom:6px;">
+            <strong class="small">{{ m.full_name }}</strong>
+            {% if m.contact_email %}<span class="pill pill-info">{{ m.contact_email }}</span>{% endif %}
+            {% if m.discord_handle %}<span class="pill pill-info">Discord: {{ m.discord_handle }}</span>{% endif %}
+            {% if m.linkedin_url %}<a href="{{ m.linkedin_url }}" target="_blank" rel="noopener" class="pill pill-info">LinkedIn</a>{% endif %}
+            {% if m.github_url %}<a href="{{ m.github_url }}" target="_blank" rel="noopener" class="pill pill-info">GitHub</a>{% endif %}
+        </div>
+        {% endif %}
+    {% endfor %}
+    {% if not (members | selectattr('role', 'in', ['owner', 'maintainer']) | selectattr('contact_email') | list) and not (members | selectattr('role', 'in', ['owner', 'maintainer']) | selectattr('discord_handle') | list) %}
+        <p class="small muted">No public contact channels set yet &mdash; reach out via their <a href="{{ url_for('auth.view_profile', user_id=members[0].id) }}">profile</a> or an issue comment.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="section-header">
+    <h2>Issues</h2>
+    <div>
+        <a href="{{ url_for('issues.new_issue', slug=project.slug) }}" class="btn btn-ghost btn-sm">New issue</a>
+    </div>
+</div>
+{% if issues %}
+<div class="card">
+    <table>
+        <thead><tr><th>Title</th><th>Status</th><th>Difficulty</th><th>Assignee</th></tr></thead>
+        <tbody>
+        {% for i in issues %}
+            <tr>
+                <td><a href="{{ url_for('issues.detail', issue_id=i.id) }}">{{ i.title }}</a></td>
+                <td><span class="pill pill-{{ i.status }}">{{ i.status.replace('_',' ') }}</span></td>
+                <td><span class="pill pill-{{ i.difficulty }}">{{ i.difficulty }}</span></td>
+                <td class="small muted">{{ i.assignee_name or '&mdash;' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">No issues yet. <a href="{{ url_for('issues.new_issue', slug=project.slug) }}">Open the first one</a>.</div>
+{% endif %}
+
+<div class="section-header">
+    <h2>Documentation</h2>
+    <a href="{{ url_for('docs.index', slug=project.slug) }}" class="btn btn-ghost btn-sm">View all</a>
+</div>
+{% if docs %}
+<ul class="list-plain">
+    {% for d in docs[:5] %}
+    <li class="flex-between">
+        <a href="{{ url_for('docs.view', slug=project.slug, doc_slug=d.slug) }}">{{ d.title }}</a>
+        <span class="pill pill-info">{{ d.doc_type }}</span>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">No documentation yet. <a href="{{ url_for('docs.new_doc', slug=project.slug) }}">Write the first guide</a>.</div>
+{% endif %}
+
+<div class="section-header"><h2>Members ({{ members|length }})</h2></div>
+<div class="card">
+    <table>
+        <thead><tr><th>Name</th><th>Role</th><th>Joined</th></tr></thead>
+        <tbody>
+        {% for m in members %}
+            <tr>
+                <td><a href="{{ url_for('auth.view_profile', user_id=m.id) }}">{{ m.full_name }}</a></td>
+                <td><span class="pill pill-info">{{ m.role }}</span></td>
+                <td class="muted small">{{ m.joined_at }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

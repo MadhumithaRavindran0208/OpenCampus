@@ -1,0 +1,3 @@
+{'id': 1, 'name': 'CampusConnect', 'difficulty': 'beginner', 'status': 'active', 'is_seeking_contributors': 0}
+{'id': 2, 'name': 'GradeTracker CLI', 'difficulty': 'intermediate', 'status': 'active', 'is_seeking_contributors': 0}
+{'id': 3, 'name': 'Line Follower Firmware', 'difficulty': 'advanced', 'status': 'seeking_maintainer', 'is_seeking_contributors': 0}

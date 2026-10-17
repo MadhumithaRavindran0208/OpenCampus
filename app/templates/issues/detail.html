@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.title }} &mdash; {{ issue.project_name }}{% endblock %}
+{% block content %}
+<p class="small muted"><a href="{{ url_for('projects.detail', slug=issue.project_slug) }}">&larr; {{ issue.project_name }}</a></p>
+
+<div class="flex-between" style="align-items:flex-start;">
+    <div>
+        <div class="meta-row">
+            <h1 style="margin:0;">{{ issue.title }}</h1>
+            <span class="pill pill-{{ issue.status }}">{{ issue.status.replace('_',' ') }}</span>
+            <span class="pill pill-{{ issue.difficulty }}">{{ issue.difficulty }}</span>
+        </div>
+        <p class="small muted">Opened by {{ issue.creator_name }} on {{ issue.created_at }}
+            {% if issue.assignee_name %} &middot; assigned to {{ issue.assignee_name }}{% endif %}</p>
+    </div>
+</div>
+
+<div class="card">
+    <p>{{ issue.description or "No description provided." }}</p>
+</div>
+
+<div style="margin:16px 0; display:flex; gap:10px; flex-wrap:wrap;">
+    {% if current_user and issue.status == 'open' %}
+    <form method="post" action="{{ url_for('issues.claim', issue_id=issue.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary">Claim this issue</button>
+    </form>
+    {% endif %}
+    {% if can_manage %}
+    <form method="post" action="{{ url_for('issues.change_status', issue_id=issue.id) }}" style="display:flex; gap:8px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="status">
+            {% for s in statuses %}<option value="{{ s }}" {% if issue.status == s %}selected{% endif %}>{{ s.replace('_',' ') }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn btn-ghost">Update status</button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="section-header"><h2>Discussion</h2></div>
+<div class="card">
+    {% if comments %}
+        {% for c in comments %}
+        <div class="comment">
+            <div class="meta-row" style="margin-bottom:2px;">
+                <strong>{{ c.full_name }}</strong>
+                <span class="small muted">{{ c.created_at }}</span>
+            </div>
+            <p style="margin:0;">{{ c.body }}</p>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="muted small">No comments yet.</p>
+    {% endif %}
+</div>
+
+{% if current_user %}
+<form method="post" action="{{ url_for('issues.comment', issue_id=issue.id) }}" style="margin-top:14px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+        <textarea name="body" placeholder="Add a comment..." required></textarea>
+    </div>
+    <button type="submit" class="btn btn-ghost">Comment</button>
+</form>
+{% endif %}
+{% endblock %}

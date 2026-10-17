@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Projects &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="section-header">
+    <h1>Projects</h1>
+    {% if current_user %}<a href="{{ url_for('projects.new_project') }}" class="btn btn-primary">New project</a>{% endif %}
+</div>
+
+<form method="get" class="card" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:20px;">
+    <div class="form-group" style="flex:2; min-width:200px; margin-bottom:0;">
+        <label for="q">Keyword</label>
+        <input type="text" id="q" name="q" value="{{ query }}" placeholder="Search name, description, tech stack">
+    </div>
+    <div class="form-group" style="min-width:160px; margin-bottom:0;">
+        <label for="difficulty">Difficulty</label>
+        <select id="difficulty" name="difficulty">
+            <option value="">Any</option>
+            {% for d in difficulties %}<option value="{{ d }}" {% if difficulty == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="form-group" style="min-width:160px; margin-bottom:0;">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+            <option value="">Any</option>
+            {% for s in statuses %}<option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s.replace('_',' ') }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600;">
+            <input type="checkbox" name="seeking" value="1" style="width:auto;" {% if seeking_only %}checked{% endif %}>
+            Help Wanted only
+        </label>
+    </div>
+    <button type="submit" class="btn btn-ghost">Filter</button>
+</form>
+
+{% if projects %}
+<div class="card-grid">
+    {% for p in projects %}
+    <a href="{{ url_for('projects.detail', slug=p.slug) }}" style="text-decoration:none; color:inherit;">
+        <div class="card card-hover">
+            <div class="card-title-row">
+                <h3 style="margin:0;">{{ p.name }}</h3>
+                <span class="pill pill-{{ p.difficulty }}">{{ p.difficulty }}</span>
+            </div>
+            {% if p.is_seeking_contributors %}
+            <div style="margin-bottom:6px;">
+                <span class="pill pill-help-wanted">Help Wanted</span>
+                {% if p.required_skills %}<span class="small muted">needs: {{ p.required_skills }}</span>{% endif %}
+            </div>
+            {% endif %}
+            <p class="small muted">{{ p.club_name }}</p>
+            <p class="small">{{ p.description[:110] }}{% if p.description|length > 110 %}&hellip;{% endif %}</p>
+            {% if p.tech_stack %}
+            <div style="margin-bottom:8px;">
+                {% for t in p.tech_stack.split(',')[:5] %}{% if t.strip() %}<span class="tag">{{ t.strip() }}</span>{% endif %}{% endfor %}
+            </div>
+            {% endif %}
+            <div class="meta-row">
+                <span class="pill pill-{{ p.status }}">{{ p.status.replace('_',' ') }}</span>
+                <span>{{ p.open_issue_count }} open issue{{ 's' if p.open_issue_count != 1 else '' }}</span>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">No projects match your filters.</div>
+{% endif %}
+{% endblock %}

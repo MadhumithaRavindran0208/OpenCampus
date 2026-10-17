@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OpenCampus OSS{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container navbar-inner">
+            <a href="{{ url_for('home') }}" class="brand">
+                <span class="brand-mark">OC</span>
+                <span class="brand-text">OpenCampus <em>OSS</em></span>
+            </a>
+
+            <form class="nav-search" action="{{ url_for('search.index') }}" method="get">
+                <input type="search" name="q" placeholder="Search projects, issues, docs..." value="{{ request.args.get('q', '') }}">
+            </form>
+
+            <div class="nav-links">
+                <a href="{{ url_for('clubs.index') }}">Clubs</a>
+                <a href="{{ url_for('projects.index') }}">Projects</a>
+                <a href="{{ url_for('announcements.index') }}">Announcements</a>
+                {% if current_user %}
+                    <a href="{{ url_for('mentorship.index') }}">Mentorship</a>
+                    <a href="{{ url_for('notifications.index') }}" class="notif-link">
+                        Notifications
+                        {% if unread_notifications %}<span class="badge">{{ unread_notifications }}</span>{% endif %}
+                    </a>
+                    {% if current_user.role == 'platform_admin' %}
+                        <a href="{{ url_for('admin.dashboard') }}">Admin</a>
+                    {% endif %}
+                    <a href="{{ url_for('auth.my_profile') }}">{{ current_user.full_name }}</a>
+                    <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost">Sign out</a>
+                {% else %}
+                    <a href="{{ url_for('auth.login') }}">Sign in</a>
+                    <a href="{{ url_for('auth.register') }}" class="btn btn-primary">Join</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="container page">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-stack">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="container footer-inner">
+            <span>OpenCampus OSS &mdash; knowledge that outlives contributors.</span>
+            <span class="footer-muted">Built for campus technical communities.</span>
+        </div>
+    </footer>
+</body>
+</html>

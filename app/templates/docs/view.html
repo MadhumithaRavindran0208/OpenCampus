@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.title }} &mdash; {{ project.name }}{% endblock %}
+{% block content %}
+<p class="small muted"><a href="{{ url_for('docs.index', slug=project.slug) }}">&larr; {{ project.name }} documentation</a></p>
+<div class="meta-row">
+    <h1 style="margin:0;">{{ doc.title }}</h1>
+    <span class="pill pill-info">{{ doc.doc_type }}</span>
+</div>
+<p class="small muted">Last updated {{ doc.updated_at }}</p>
+<div class="card">
+    <div class="markdown-body">
+        {% if rendered_html %}{{ rendered_html | safe }}{% else %}This document has no content yet.{% endif %}
+    </div>
+</div>
+{% endblock %}
