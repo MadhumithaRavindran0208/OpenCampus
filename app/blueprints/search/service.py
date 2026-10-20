@@ -1,6 +1,13 @@
+"""
+Unified search service using SQLAlchemy ORM.
+"""
 from __future__ import annotations
 
-from app.core import db
+from sqlalchemy import or_
+from app.extensions import db
+from app.blueprints.projects.models import Project, Issue
+from app.blueprints.clubs.models import Club
+from app.blueprints.docs.models import Document
 
 
 def unified_search(query: str, limit: int = 25) -> dict:
@@ -8,26 +15,69 @@ def unified_search(query: str, limit: int = 25) -> dict:
         return {"projects": [], "issues": [], "docs": [], "clubs": []}
     like = f"%{query}%"
 
-    projects = db.query(
-        """SELECT p.id, p.name, p.slug, p.description, c.slug AS club_slug
-           FROM projects p JOIN clubs c ON c.id = p.club_id
-           WHERE p.name LIKE ? OR p.description LIKE ? OR p.tech_stack LIKE ? LIMIT ?""",
-        (like, like, like, limit),
+    project_rows = (
+        db.session.query(
+            Project.id,
+            Project.name,
+            Project.slug,
+            Project.description,
+            Club.slug.label("club_slug"),
+        )
+        .join(Club, Club.id == Project.club_id)
+        .filter(
+            or_(
+                Project.name.ilike(like),
+                Project.description.ilike(like),
+                Project.tech_stack.ilike(like),
+            )
+        )
+        .limit(limit)
+        .all()
     )
-    issues = db.query(
-        """SELECT i.id, i.title, i.status, p.slug AS project_slug, p.name AS project_name
-           FROM issues i JOIN projects p ON p.id = i.project_id
-           WHERE i.title LIKE ? OR i.description LIKE ? LIMIT ?""",
-        (like, like, limit),
+
+    issue_rows = (
+        db.session.query(
+            Issue.id,
+            Issue.title,
+            Issue.status,
+            Project.slug.label("project_slug"),
+            Project.name.label("project_name"),
+        )
+        .join(Project, Project.id == Issue.project_id)
+        .filter(or_(Issue.title.ilike(like), Issue.description.ilike(like)))
+        .limit(limit)
+        .all()
     )
-    docs = db.query(
-        """SELECT d.id, d.title, d.slug AS doc_slug, p.slug AS project_slug, p.name AS project_name
-           FROM documents d JOIN projects p ON p.id = d.project_id
-           WHERE d.title LIKE ? OR d.content_md LIKE ? LIMIT ?""",
-        (like, like, limit),
+
+    doc_rows = (
+        db.session.query(
+            Document.id,
+            Document.title,
+            Document.slug.label("doc_slug"),
+            Project.slug.label("project_slug"),
+            Project.name.label("project_name"),
+        )
+        .join(Project, Project.id == Document.project_id)
+        .filter(or_(Document.title.ilike(like), Document.content_md.ilike(like)))
+        .limit(limit)
+        .all()
     )
-    clubs = db.query(
-        "SELECT id, name, slug, description FROM clubs WHERE name LIKE ? OR description LIKE ? LIMIT ?",
-        (like, like, limit),
+
+    club_rows = (
+        db.session.query(
+            Club.id,
+            Club.name,
+            Club.slug,
+            Club.description,
+        )
+        .filter(or_(Club.name.ilike(like), Club.description.ilike(like)))
+        .limit(limit)
+        .all()
     )
-    return {"projects": projects, "issues": issues, "docs": docs, "clubs": clubs}
+
+    return {
+        "projects": [dict(r._mapping) for r in project_rows],
+        "issues": [dict(r._mapping) for r in issue_rows],
+        "docs": [dict(r._mapping) for r in doc_rows],
+        "clubs": [dict(r._mapping) for r in club_rows],
+    }

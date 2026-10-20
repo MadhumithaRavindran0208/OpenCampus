@@ -1,23 +1,30 @@
 """
-Application factory. This is the single place that knows every module
-exists -- individual blueprints never import each other's routes, only
-shared services in app/core. That's what keeps modules independently
-replaceable (see ARCHITECTURE.md).
+Application factory configured with central extensions registry.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, g, render_template, request
+from flask_login import current_user
 
 from app.core.config import get_config
-from app.core import db as db_module
-from app.core import security, listeners, csrf
+from app.extensions import db, migrate, login_manager, csrf as csrf_ext
+from app.core import security, listeners
 from app.core.crash_reporter import write_crash_report
+from app.core.logging_config import configure_logging
+from app.core import rate_limit as rl
+from app.core import telemetry
 
 
 def create_app(config_overrides: dict | None = None) -> Flask:
+    is_production = os.environ.get("OPENCAMPUS_ENV", "development").lower() == "production"
+
+    # Configure structured logging before anything else
+    configure_logging(is_production=is_production)
+
     app = Flask(__name__)
     cfg = get_config()
     app.config.from_object(cfg)
@@ -25,47 +32,109 @@ def create_app(config_overrides: dict | None = None) -> Flask:
         app.config.update(config_overrides)
 
     cfg.ensure_data_dir()
-    db_module.init_app(app)
 
-    # Apply any pending migrations at startup so `python run.py` always
-    # results in an up-to-date schema -- no manual migration step to forget.
-    migrations_dir = Path(__file__).resolve().parent.parent / "migrations"
-    db_module.apply_migrations(Path(app.config["DATABASE_PATH"]), migrations_dir)
+    # Initialize extensions decoupled from application
+    db.init_app(app)
+    migrate.init_app(app, db)
+    login_manager.init_app(app)
+    csrf_ext.init_app(app)
+
+    # Wire distributed tracing & latency SLO monitoring
+    telemetry.init_app(app)
+
+    # Wire in rate limiting (in-memory by default, Redis when REDIS_URL is set).
+    rl.init_app(app)
+
+    # Ensure all ORM models are registered and create tables if needed
+    if not app.config.get("SKIP_DB_INIT"):
+        with app.app_context():
+            from app.blueprints.auth import models as _auth_models  # noqa: F401
+            from app.blueprints.clubs import models as _clubs_models  # noqa: F401
+            from app.blueprints.projects import models as _projects_models  # noqa: F401
+            from app.blueprints.announcements import models as _announcements_models  # noqa: F401
+            from app.blueprints.docs import models as _docs_models  # noqa: F401
+            from app.blueprints.notifications import models as _notifications_models  # noqa: F401
+            db.create_all()
+            try:
+                from sqlalchemy import inspect, text
+                inspector = inspect(db.engine)
+                tables = inspector.get_table_names()
+                if "projects" in tables:
+                    cols = [col["name"] for col in inspector.get_columns("projects")]
+                    if "looking_for" not in cols:
+                        db.session.execute(text("ALTER TABLE projects ADD COLUMN looking_for TEXT DEFAULT ''"))
+                    if "source_code_restricted" not in cols:
+                        db.session.execute(text("ALTER TABLE projects ADD COLUMN source_code_restricted INTEGER NOT NULL DEFAULT 1"))
+                    if "readme" not in cols:
+                        db.session.execute(text("ALTER TABLE projects ADD COLUMN readme TEXT DEFAULT ''"))
+                    db.session.commit()
+                if "clubs" in tables:
+                    cols = [col["name"] for col in inspector.get_columns("clubs")]
+                    if "admin_id" not in cols:
+                        db.session.execute(text("ALTER TABLE clubs ADD COLUMN admin_id INTEGER"))
+                    if "admin_secret_code_hash" not in cols:
+                        db.session.execute(text("ALTER TABLE clubs ADD COLUMN admin_secret_code_hash VARCHAR(255)"))
+                    db.session.commit()
+                if "users" in tables:
+                    cols = [col["name"] for col in inspector.get_columns("users")]
+                    if "is_verified" not in cols:
+                        db.session.execute(text("ALTER TABLE users ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0"))
+                        # Accounts that pre-date email verification must not be locked out.
+                        db.session.execute(text("UPDATE users SET is_verified = 1"))
+                    if "verification_token" not in cols:
+                        db.session.execute(text("ALTER TABLE users ADD COLUMN verification_token VARCHAR(255) DEFAULT ''"))
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
 
     listeners.register_all()
 
     app.before_request(security.load_logged_in_user)
 
-    @app.before_request
-    def _enforce_csrf():
-        # Skipped under TESTING so the rest of the suite doesn't need to
-        # know about CSRF at all -- tests/test_csrf.py exercises the real
-        # enforcement path explicitly with TESTING off.
-        if app.testing:
-            return None
-        if request.method in csrf.SAFE_METHODS:
-            return None
-        submitted = request.form.get(csrf.FORM_FIELD) or request.headers.get("X-CSRF-Token")
-        if not csrf.validate_csrf_token(submitted):
-            return render_template(
-                "errors/error.html", code=400,
-                message="Your session expired or the form was out of date. Please go back and try again.",
-            ), 400
-        return None
+    # Log every request in a structured way with duration_ms and trace_id for APM.
+    @app.after_request
+    def _log_request(response):
+        import time
+        duration_ms = None
+        if hasattr(g, "start_time"):
+            duration_ms = round((time.monotonic() - g.start_time) * 1000, 2)
 
-    app.jinja_env.globals["csrf_token"] = csrf.get_csrf_token
+        app.logger.info(
+            "%s %s %s (%sms)",
+            request.method, request.path, response.status_code, duration_ms or 0,
+            extra={
+                "method": request.method,
+                "path": request.path,
+                "status": response.status_code,
+                "duration_ms": duration_ms,
+                "ip": request.remote_addr,
+                "trace_id": getattr(g, "trace_id", None),
+            },
+        )
+        if response.content_type and "text/html" in response.content_type:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+
+        return response
 
     @app.context_processor
     def inject_globals():
         unread_count = 0
-        if g.get("user"):
-            row = db_module.query_one(
-                "SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND is_read = 0",
-                (g.user["id"],),
-            )
-            unread_count = row["c"] if row else 0
-        return {"current_user": g.get("user"), "unread_notifications": unread_count, "now": datetime.now(timezone.utc)}
+        user = current_user if current_user.is_authenticated else None
+        if user:
+            from app.blueprints.notifications.models import Notification
+            unread_count = Notification.query.filter_by(user_id=user.id, is_read=0).count()
+        return {
+            "current_user": current_user,
+            "user": user,
+            "unread_notifications": unread_count,
+            "now": datetime.now(timezone.utc),
+        }
 
+    # -----------------------------------------------------------------------
+    # Blueprints
+    # -----------------------------------------------------------------------
     from app.blueprints.auth.routes import bp as auth_bp
     from app.blueprints.clubs.routes import bp as clubs_bp
     from app.blueprints.projects.routes import bp as projects_bp
@@ -76,6 +145,8 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     from app.blueprints.notifications.routes import bp as notifications_bp
     from app.blueprints.search.routes import bp as search_bp
     from app.blueprints.admin.routes import bp as admin_bp
+    from app.blueprints.sse.routes import bp as sse_bp
+    from app.blueprints.health.routes import bp as health_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(clubs_bp)
@@ -87,6 +158,11 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     app.register_blueprint(notifications_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(sse_bp)
+    app.register_blueprint(health_bp)
+
+    # Exempt health probes from rate limiting.
+    rl.limiter.exempt(health_bp)
 
     @app.route("/")
     def home():
@@ -107,22 +183,22 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     def not_found(_e):
         return render_template("errors/error.html", code=404, message="That page doesn't exist."), 404
 
+    @app.errorhandler(429)
+    def rate_limited(_e):
+        return render_template(
+            "errors/error.html", code=429,
+            message="You're doing that too fast. Please wait a moment and try again.",
+        ), 429
+
     @app.errorhandler(Exception)
     def handle_unexpected_error(e):
         from werkzeug.exceptions import HTTPException
 
-        # 403/404/etc. are expected control flow, not bugs -- let Flask's
-        # normal handling (including the two handlers above) deal with
-        # those. Only genuinely unexpected exceptions get a crash report.
         if isinstance(e, HTTPException):
             return e
 
         reports_dir = Path(app.config["DATA_DIR"]) / "crash_reports"
         report_path = write_crash_report(e, f"{request.method} {request.path}", reports_dir)
-        # The report's path is logged for whoever operates this deployment,
-        # never shown in the response: a file path or instance-directory
-        # layout is internal information disclosure and of no use to the
-        # person who hit the bug.
         app.logger.error("Unhandled exception -- crash report written to %s", report_path)
 
         return render_template(

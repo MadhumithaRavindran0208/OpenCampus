@@ -36,22 +36,41 @@ def seed(app) -> None:
             return
 
         print("Creating users...")
-        admin = auth_service.register_user("admin@opencampus.dev", DEMO_PASSWORD, "Priya Nair", "student")
+        _register = auth_service.register_user
+
+        def register(email, password, full_name, role="student"):
+            """Register a demo user and mark them verified so the advertised
+            demo logins work without an email round-trip."""
+            user = _register(email, password, full_name, role)
+            db.execute("UPDATE users SET is_verified = 1, verification_token = '' WHERE id = ?", (user["id"],))
+            return user
+
+        admin = register("admin@opencampus.dev", DEMO_PASSWORD, "Priya Nair", "student")
         db.execute("UPDATE users SET role = 'platform_admin' WHERE id = ?", (admin["id"],))
 
-        maintainer1 = auth_service.register_user("arjun.k@opencampus.dev", DEMO_PASSWORD, "Arjun Kumar", "student")
-        maintainer2 = auth_service.register_user("sara.j@opencampus.dev", DEMO_PASSWORD, "Sara Jacob", "student")
-        mentor1 = auth_service.register_user("mentor.das@opencampus.dev", DEMO_PASSWORD, "Dr. Ravi Das", "mentor")
-        student1 = auth_service.register_user("student.meera@opencampus.dev", DEMO_PASSWORD, "Meera Pillai", "student")
-        student2 = auth_service.register_user("student.karthik@opencampus.dev", DEMO_PASSWORD, "Karthik Rao", "student")
+        maintainer1 = register("arjun.k@opencampus.dev", DEMO_PASSWORD, "Arjun Kumar", "student")
+        db.execute("UPDATE users SET role = 'club_admin' WHERE id = ?", (maintainer1["id"],))
+
+        maintainer2 = register("sara.j@opencampus.dev", DEMO_PASSWORD, "Sara Jacob", "student")
+        db.execute("UPDATE users SET role = 'club_admin' WHERE id = ?", (maintainer2["id"],))
+
+        mentor1 = register("mentor.das@opencampus.dev", DEMO_PASSWORD, "Dr. Ravi Das", "mentor")
+        student1 = register("student.meera@opencampus.dev", DEMO_PASSWORD, "Meera Pillai", "student")
+        student2 = register("student.karthik@opencampus.dev", DEMO_PASSWORD, "Karthik Rao", "student")
 
         print("Creating clubs...")
         cs_club = clubs_service.create_club(
             "Computer Science Society", "Building tools and running workshops for the CS department.", maintainer1["id"]
         )
+        clubs_service.set_club_admin(cs_club["id"], maintainer1["id"])
+        clubs_service.set_club_secret_code(cs_club["id"], "cs_secret_123")
+
         robotics_club = clubs_service.create_club(
             "Robotics Club", "Hardware and software projects for autonomous systems.", maintainer2["id"]
         )
+        clubs_service.set_club_admin(robotics_club["id"], maintainer2["id"])
+        clubs_service.set_club_secret_code(robotics_club["id"], "robotics_secret_123")
+
         clubs_service.join_club(cs_club["id"], student1["id"])
         clubs_service.join_club(cs_club["id"], student2["id"])
         clubs_service.join_club(robotics_club["id"], student1["id"])
@@ -159,12 +178,31 @@ def seed(app) -> None:
 
         print("Creating mentorship requests...")
         mentorship_service.request_mentorship(
-            grade_tracker["id"], student2["id"], "I'd love guidance on structuring the CLI and writing tests."
+            grade_tracker["id"], student2["id"], "I'd love guidance on structuring the CLI and writing tests.", mentor_id=mentor1["id"]
         )
         req = mentorship_service.request_mentorship(
-            campus_connect["id"], student1["id"], "Looking for feedback on my search implementation approach."
+            campus_connect["id"], student1["id"], "Looking for feedback on my search implementation approach.", mentor_id=mentor1["id"]
         )
-        mentorship_service.accept_request(req["id"], mentor1["id"])
+        mentorship_service.accept_request(req.id, mentor1["id"])
+
+        print("Setting up collaboration tags & verified contributions...")
+        tag1 = projects_service.add_collaboration_tag(campus_connect["id"], "Frontend Development", student1["id"])
+        projects_service.approve_collaboration_tag(tag1.id, maintainer1["id"])
+
+        tag2 = projects_service.add_collaboration_tag(campus_connect["id"], "Search & Indexing", student1["id"])
+        projects_service.approve_collaboration_tag(tag2.id, maintainer1["id"])
+
+        tag3 = projects_service.add_collaboration_tag(line_follower["id"], "Firmware & Embedded", maintainer2["id"])
+        projects_service.approve_collaboration_tag(tag3.id, maintainer2["id"])
+
+        projects_service.record_verified_contribution(
+            campus_connect["id"], student1["id"], "pull_request",
+            "Implemented search bar and debounce filtering", "PR #14 merged", maintainer1["id"]
+        )
+        projects_service.record_verified_contribution(
+            grade_tracker["id"], student2["id"], "issue_resolved",
+            "Resolved GPA cumulative calculation precision issue", "Issue #3 closed", maintainer1["id"]
+        )
 
         print("Posting announcements...")
         announcements_service.post_announcement(

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Source Code Access Management &mdash; {{ project.name }}{% endblock %}
+{% block content %}
+<div class="flex-between" style="align-items:flex-start; margin-bottom:20px;">
+    <div>
+        <p class="small muted" style="margin-bottom:2px;"><a href="{{ url_for('projects.detail', slug=project.slug) }}">&larr; Back to {{ project.name }}</a></p>
+        <h1 style="margin:0;">Source Code Access Management</h1>
+        <p class="muted">Control who can access the source code, repository links, and code assets for <strong>{{ project.name }}</strong>.</p>
+    </div>
+</div>
+
+{# Project Visibility Configuration #}
+<div class="card" style="margin-bottom:24px;">
+    <h3>Project Source Code Visibility</h3>
+    <p class="small muted">
+        By default, OpenCampus OSS restricts source code access to project owners, maintainers, approved mentors, and authorized students, while keeping README files and project metadata public for project discovery.
+    </p>
+
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="toggle_visibility">
+        
+        <div class="form-group" style="margin:16px 0;">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+                <input type="radio" name="restricted" value="1" {% if project.source_code_restricted %}checked{% endif %} style="width:auto;">
+                Restricted (Recommended) &mdash; Only authorized users, approved mentors, and explicit access grant recipients can view or download source code.
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin-top:8px;">
+                <input type="radio" name="restricted" value="0" {% if not project.source_code_restricted %}checked{% endif %} style="width:auto;">
+                Public &mdash; Any signed-in student or mentor can access the repository and source code.
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Save Visibility Setting</button>
+    </form>
+</div>
+
+{# Grant Access to a Specific User #}
+<div class="card" style="margin-bottom:24px;">
+    <h3>Grant Source Code Access to a User</h3>
+    <p class="small muted">Provide direct source-code access to a specific student, mentor, or peer collaborator without altering platform-wide visibility.</p>
+
+    <form method="post" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="grant">
+
+        <div class="form-group" style="margin-bottom:0; flex:1; min-width:260px;">
+            <label for="target_user_id">Select User</label>
+            <select id="target_user_id" name="target_user_id" required>
+                <option value="">-- Choose student or mentor --</option>
+                {% for u in all_users %}
+                <option value="{{ u.id }}">{{ u.full_name }} ({{ u.email }}) &mdash; {{ u.role }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Grant Access</button>
+    </form>
+</div>
+
+{# Active Access Grants List #}
+<div class="section-header">
+    <h2>Explicit Access Grants ({{ grants|length }})</h2>
+</div>
+{% if grants %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Granted On</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for g in grants %}
+            <tr>
+                <td><strong>{{ g.user_name }}</strong></td>
+                <td class="small">{{ g.user_email }}</td>
+                <td><span class="pill pill-info">{{ g.user_role }}</span></td>
+                <td class="small muted">{{ g.created_at }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('projects.revoke_access', slug=project.slug, grant_id=g.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger, #e53e3e);">Revoke Access</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">No individual source code access grants have been issued for this project yet.</div>
+{% endif %}
+{% endblock %}

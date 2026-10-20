@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Audit Logs &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="flex-between">
+    <div>
+        <h1>Security & Administrative Audit Logs</h1>
+        <p class="muted">Tracks authentication, role promotions, access grants, tag reviews, and club management events.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('admin.dashboard') }}" class="btn btn-ghost btn-sm">&larr; Back to Admin Dashboard</a>
+    </div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+    {% if logs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp (UTC)</th>
+                <th>Action</th>
+                <th>User / Initiator</th>
+                <th>Target</th>
+                <th>Details</th>
+                <th>IP Address</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for l in logs %}
+            <tr>
+                <td class="small muted" style="white-space:nowrap;">{{ l.created_at }}</td>
+                <td>
+                    <span class="pill pill-info" style="font-size:0.8em; font-family:monospace;">{{ l.action }}</span>
+                </td>
+                <td class="small">
+                    {% if l.user_email %}
+                        <strong>{{ l.user_email }}</strong> (ID: {{ l.user_id }})
+                    {% elif l.user_id %}
+                        User #{{ l.user_id }}
+                    {% else %}
+                        <span class="muted">System / Anonymous</span>
+                    {% endif %}
+                </td>
+                <td class="small">
+                    {% if l.target_type %}
+                        <span class="pill pill-muted">{{ l.target_type }} #{{ l.target_id }}</span>
+                    {% else %}
+                        &mdash;
+                    {% endif %}
+                </td>
+                <td class="small muted" style="max-width:320px; word-break:break-word;">
+                    {{ l.details or '&mdash;' }}
+                </td>
+                <td class="small muted">{{ l.ip_address or '&mdash;' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">No audit log records found yet.</div>
+    {% endif %}
+</div>
+{% endblock %}

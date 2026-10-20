@@ -18,24 +18,82 @@
         <div>
             {% for t in project.tech_stack.split(',') %}{% if t.strip() %}<span class="tag">{{ t.strip() }}</span>{% endif %}{% endfor %}
         </div>
+        </div>
         {% endif %}
-        {% if project.repo_url %}<p class="small"><a href="{{ project.repo_url }}" target="_blank" rel="noopener">Repository &rarr;</a></p>{% endif %}
+
+        {# Collaboration Tags #}
+        <div style="margin: 10px 0;">
+            <strong class="small">Collaboration Tags:</strong>
+            {% if approved_tags %}
+                {% for tag in approved_tags %}
+                    <span class="pill pill-info" style="font-size:0.85em; margin-right:4px;"># {{ tag.name }}</span>
+                {% endfor %}
+            {% else %}
+                <span class="small muted">None approved yet</span>
+            {% endif %}
+        </div>
+
+        {# Source Code Access Control Display #}
+        <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            {% if has_source_code_access %}
+                {% if project.repo_url %}
+                    <a href="{{ url_for('projects.source_code', slug=project.slug) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Repository &rarr;</a>
+                {% else %}
+                    <span class="pill pill-success">Source Code Authorized</span>
+                {% endif %}
+            {% else %}
+                <span class="pill pill-muted" style="border:1px solid var(--border-color, #cbd5e0); padding:4px 8px;">&#128274; Source Code Restricted</span>
+                <span class="small muted">Restricted to project team, approved mentors, and authorized students.</span>
+            {% endif %}
+            <a href="{{ url_for('projects.people', slug=project.slug) }}" class="btn btn-ghost btn-sm">People & Contributions</a>
+            {% if is_maintainer %}
+                <a href="{{ url_for('projects.manage_access', slug=project.slug) }}" class="btn btn-ghost btn-sm">Manage Code Access</a>
+            {% endif %}
+        </div>
     </div>
     <div style="text-align:right; white-space:nowrap;">
-        {% if current_user and not is_member %}
+        {% if current_user.is_authenticated and not is_member %}
         <form method="post" action="{{ url_for('projects.join', slug=project.slug) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-primary">Join as contributor</button>
         </form>
         {% elif is_member %}
             <span class="pill pill-success">Member</span>
+        {% elif not current_user.is_authenticated %}
+            <a href="{{ url_for('auth.login', next=url_for('projects.join', slug=project.slug)) }}" class="btn btn-primary">Join as contributor</a>
         {% endif %}
-        {% if current_user %}
-        <form method="post" action="{{ url_for('mentorship.request_mentorship', slug=project.slug) }}" style="margin-top:8px;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if current_user and current_user.role == 'student' %}
+        <form method="post" action="{{ url_for('mentorship.request_mentorship', slug=project.slug) }}" style="margin-top:8px; display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="mentor_id" style="font-size:0.8em; padding:3px 6px; max-width:180px;">
+                <option value="">-- Choose Mentor --</option>
+                {% for mentor in available_mentors %}
+                <option value="{{ mentor.id }}">{{ mentor.full_name }}</option>
+                {% endfor %}
+            </select>
             <input type="hidden" name="message" value="Requesting mentorship on {{ project.name }}">
             <button type="submit" class="btn btn-ghost btn-sm">Request mentorship</button>
         </form>
+        {% endif %}
+    </div>
+</div>
+
+{# Prominent Project README View #}
+<div class="card" style="margin-top:20px;">
+    <div class="flex-between">
+        <h3 style="margin:0;">README</h3>
+        <span class="small pill pill-info">Public Documentation</span>
+    </div>
+    <hr class="divider">
+    <div class="prose" style="line-height:1.6;">
+        <p><strong>{{ project.name }}</strong></p>
+        <p>{{ project.description }}</p>
+        <p><strong>Tech Stack:</strong> {{ project.tech_stack or 'Open Source' }}</p>
+        {% if project.required_skills %}
+        <p><strong>Skills Needed:</strong> {{ project.required_skills }}</p>
+        {% endif %}
+        {% if project.looking_for %}
+        <p><strong>Looking For:</strong> {{ project.looking_for }}</p>
         {% endif %}
     </div>
 </div>
@@ -87,6 +145,65 @@
         <button type="submit" class="btn btn-ghost btn-sm">Request transfer</button>
     </form>
     <p class="help-text">Ownership transfers require the receiving member's context to already be a project member; an admin resolves the handover.</p>
+</div>
+{% endif %}
+
+{# Collaboration Tags Proposal & Review Card #}
+{% if is_maintainer or can_review_tags %}
+<div class="card" style="margin-bottom:20px;">
+    <h3>Collaboration Tag Management</h3>
+    <p class="small muted">Tag specific collaboration areas (e.g. Frontend, Backend, Testing, Documentation, UI/UX). Tags require Club Admin or Main Admin approval.</p>
+
+    {% if is_maintainer %}
+    <form method="post" action="{{ url_for('projects.new_tag', slug=project.slug) }}" style="display:flex; gap:8px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group" style="margin-bottom:0; flex:1; min-width:240px;">
+            <label for="tag_name">Propose Collaboration Tag</label>
+            <input type="text" id="tag_name" name="tag_name" placeholder="e.g. Frontend Development, Documentation, Testing" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Submit Tag for Approval</button>
+    </form>
+    {% endif %}
+
+    {% if all_tags %}
+    <table>
+        <thead><tr><th>Tag</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead>
+        <tbody>
+        {% for t in all_tags %}
+            <tr>
+                <td><strong>{{ t.name }}</strong></td>
+                <td>
+                    {% if t.status == 'approved' %}
+                        <span class="pill pill-success">Approved</span>
+                    {% elif t.status == 'pending' %}
+                        <span class="pill pill-info">Pending Review</span>
+                    {% else %}
+                        <span class="pill pill-danger" title="{{ t.rejection_reason }}">Rejected: {{ t.rejection_reason }}</span>
+                    {% endif %}
+                </td>
+                <td class="small muted">{{ t.created_at }}</td>
+                <td>
+                    {% if can_review_tags and t.status == 'pending' %}
+                    <div style="display:flex; gap:6px;">
+                        <form method="post" action="{{ url_for('projects.approve_tag', tag_id=t.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+                        </form>
+                        <form method="post" action="{{ url_for('projects.reject_tag', tag_id=t.id) }}" style="display:flex; gap:4px;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="text" name="reason" placeholder="Reason" required style="width:120px; font-size:0.8em; padding:2px 4px;">
+                            <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger, #e53e3e);">Reject</button>
+                        </form>
+                    </div>
+                    {% else %}
+                        &mdash;
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
 </div>
 {% endif %}
 

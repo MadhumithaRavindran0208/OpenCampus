@@ -26,11 +26,17 @@ class OpenCampusTestCase(unittest.TestCase):
         events.reset_subscribers()
 
         self.tmpdir = tempfile.mkdtemp()
+        db_test_file = Path(self.tmpdir) / "test.db"
+        self.admin_secret = "test_secret_for_suite"
         self.app = create_app({
             "DATA_DIR": Path(self.tmpdir),
-            "DATABASE_PATH": Path(self.tmpdir) / "test.db",
+            "DATABASE_PATH": db_test_file,
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{db_test_file.as_posix()}",
             "ALLOW_SELF_REGISTRATION": True,
             "TESTING": True,
+            "WTF_CSRF_ENABLED": False,
+            "MAIN_ADMIN_SECRET_CODE": self.admin_secret,
+            "REQUIRE_EMAIL_VERIFICATION": False,
         })
         self.client = self.app.test_client()
 
@@ -44,10 +50,13 @@ class OpenCampusTestCase(unittest.TestCase):
             follow_redirects=True,
         )
 
-    def login(self, email, password="password123"):
-        return self.client.post(
-            "/auth/login", data={"email": email, "password": password}, follow_redirects=True
-        )
+    def login(self, email, password="password123", secret_code=None):
+        data = {"email": email, "password": password}
+        if secret_code is not None:
+            data["secret_code"] = secret_code
+        elif "admin" in email:
+            data["secret_code"] = getattr(self, "admin_secret", "")
+        return self.client.post("/auth/login", data=data, follow_redirects=True)
 
     def create_club(self, name="Test Club"):
         return self.client.post(

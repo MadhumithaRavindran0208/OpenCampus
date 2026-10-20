@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}People & Verified Contributions &mdash; {{ project.name }}{% endblock %}
+{% block content %}
+<div class="flex-between" style="align-items:flex-start; margin-bottom:20px;">
+    <div>
+        <p class="small muted" style="margin-bottom:2px;"><a href="{{ url_for('projects.detail', slug=project.slug) }}">&larr; Back to {{ project.name }}</a></p>
+        <h1 style="margin:0;">People & Contributions</h1>
+        <p class="muted">Recognized contributors, assigned mentors, and verified project milestones for <strong>{{ project.name }}</strong>.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('projects.detail', slug=project.slug) }}" class="btn btn-ghost">Project Overview</a>
+    </div>
+</div>
+
+<div class="stat-grid" style="margin:20px 0;">
+    <div class="stat-box"><div class="stat-number">{{ members|length }}</div><div class="stat-label">Recognized Collaborators</div></div>
+    <div class="stat-box"><div class="stat-number">{{ assigned_mentors|length }}</div><div class="stat-label">Assigned Mentors</div></div>
+    <div class="stat-box"><div class="stat-number">{{ contributions|length }}</div><div class="stat-label">Verified Contributions</div></div>
+</div>
+
+{# Record a Verified Contribution (for Maintainers/Owners) #}
+{% if is_maintainer %}
+<div class="card" style="margin-bottom:24px;">
+    <h3>Record / Acknowledge Verified Contribution</h3>
+    <p class="small muted">Acknowledge meaningful contributions such as accepted pull requests, merged code, documentation additions, and issue resolution.</p>
+
+    <form method="post" action="{{ url_for('projects.verify_contribution', slug=project.slug) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            <div class="form-group" style="flex:1; min-width:220px;">
+                <label for="user_id">Collaborator</label>
+                <select id="user_id" name="user_id" required>
+                    <option value="">-- Choose collaborator --</option>
+                    {% for m in members %}
+                    <option value="{{ m.id }}">{{ m.full_name }} ({{ m.project_role }})</option>
+                    {% endfor %}
+                    {% for mentor in assigned_mentors %}
+                    <option value="{{ mentor.id }}">{{ mentor.full_name }} (Assigned Mentor)</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="flex:1; min-width:200px;">
+                <label for="activity_type">Contribution Category</label>
+                <select id="activity_type" name="activity_type" required>
+                    <option value="pull_request">Accepted Pull Request / Merged Code</option>
+                    <option value="code_commit">Repository Code Commit</option>
+                    <option value="documentation">Documentation Improvement</option>
+                    <option value="testing_and_issue_resolution">Testing & Issue Resolution</option>
+                    <option value="code_review">Code Review & Architecture</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="width:100px;">
+                <label for="points">Points</label>
+                <input type="number" id="points" name="points" value="10" min="1" max="100" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="details">Details & Verification Reference</label>
+            <input type="text" id="details" name="details" placeholder="e.g. PR #42: Fixed authentication token leak / Added test suite" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Record Verified Contribution</button>
+    </form>
+</div>
+{% endif %}
+
+{# Verified Contributions Feed #}
+<div class="section-header">
+    <h2>Verified Project Contributions ({{ contributions|length }})</h2>
+</div>
+{% if contributions %}
+<div class="card" style="margin-bottom:24px;">
+    <table>
+        <thead>
+            <tr>
+                <th>Contributor</th>
+                <th>Activity Type</th>
+                <th>Points</th>
+                <th>Verified Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in contributions %}
+            <tr>
+                <td><strong><a href="{{ url_for('auth.view_profile', user_id=c.user_id) }}">{{ c.user_name }}</a></strong></td>
+                <td><span class="pill pill-info">{{ c.activity_type.replace('_', ' ') }}</span></td>
+                <td><span class="pill pill-success">+{{ c.points }} pts</span></td>
+                <td class="small muted">{{ c.created_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:24px;">No verified contributions recorded on this project yet.</div>
+{% endif %}
+
+{# Recognized Collaborators & Team #}
+<div class="section-header">
+    <h2>Recognized Collaborators ({{ members|length }})</h2>
+</div>
+<div class="card" style="margin-bottom:24px;">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Project Role</th>
+                <th>Platform Role</th>
+                <th>Joined Project</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in members %}
+            <tr>
+                <td><strong><a href="{{ url_for('auth.view_profile', user_id=m.id) }}">{{ m.full_name }}</a></strong></td>
+                <td><span class="pill pill-info">{{ m.project_role }}</span></td>
+                <td class="small muted">{{ m.platform_role }}</td>
+                <td class="small muted">{{ m.joined_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# Assigned Mentors #}
+{% if assigned_mentors %}
+<div class="section-header">
+    <h2>Assigned Mentors ({{ assigned_mentors|length }})</h2>
+</div>
+<div class="card" style="margin-bottom:24px;">
+    <table>
+        <thead>
+            <tr>
+                <th>Mentor</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Assigned Since</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mentor in assigned_mentors %}
+            <tr>
+                <td><strong><a href="{{ url_for('auth.view_profile', user_id=mentor.id) }}">{{ mentor.full_name }}</a></strong></td>
+                <td class="small">{{ mentor.email }}</td>
+                <td><span class="pill pill-success">Active Mentor</span></td>
+                <td class="small muted">{{ mentor.created_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

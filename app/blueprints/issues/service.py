@@ -1,88 +1,167 @@
+"""
+Issue management and discussion service using SQLAlchemy ORM.
+"""
 from __future__ import annotations
 
-from app.core import db, events
+from datetime import datetime, timezone
+from app.extensions import db
+from app.core import events
+from app.blueprints.projects.models import Issue, IssueComment, Project
+from app.blueprints.auth.models import User
 
 
 class IssueError(Exception):
     pass
 
 
-def create_issue(project_id: int, title: str, description: str, difficulty: str, created_by: int) -> dict:
+def create_issue(project_id: int, title: str, description: str, difficulty: str, created_by: int) -> Issue:
     title = title.strip()
     if not title:
         raise IssueError("Issue title is required.")
-    issue_id = db.execute(
-        "INSERT INTO issues (project_id, title, description, difficulty, created_by) VALUES (?, ?, ?, ?, ?)",
-        (project_id, title, description.strip(), difficulty, created_by),
+
+    issue = Issue(
+        project_id=project_id,
+        title=title,
+        description=description.strip(),
+        difficulty=difficulty,
+        created_by=created_by,
+        status="open",
     )
-    events.emit(events.ISSUE_CREATED, issue_id=issue_id, project_id=project_id, created_by=created_by, title=title)
-    return db.query_one("SELECT * FROM issues WHERE id = ?", (issue_id,))
+    db.session.add(issue)
+    db.session.commit()
+
+    events.emit(events.ISSUE_CREATED, issue_id=issue.id, project_id=project_id, created_by=created_by, title=title)
+    return issue
 
 
 def list_issues(project_id: int, status: str = "") -> list[dict]:
-    sql = """SELECT i.*, u.full_name AS assignee_name, cu.full_name AS creator_name
-              FROM issues i
-              LEFT JOIN users u ON u.id = i.assigned_to
-              JOIN users cu ON cu.id = i.created_by
-              WHERE i.project_id = ?"""
-    params: list = [project_id]
+    Creator = db.aliased(User)
+    Assignee = db.aliased(User)
+
+    q = (
+        db.session.query(
+            Issue.id,
+            Issue.project_id,
+            Issue.title,
+            Issue.description,
+            Issue.status,
+            Issue.difficulty,
+            Issue.created_by,
+            Issue.assigned_to,
+            Issue.created_at,
+            Issue.updated_at,
+            Assignee.full_name.label("assignee_name"),
+            Creator.full_name.label("creator_name"),
+        )
+        .join(Creator, Creator.id == Issue.created_by)
+        .outerjoin(Assignee, Assignee.id == Issue.assigned_to)
+        .filter(Issue.project_id == project_id)
+    )
+
     if status:
-        sql += " AND i.status = ?"
-        params.append(status)
-    sql += " ORDER BY CASE i.status WHEN 'open' THEN 0 WHEN 'claimed' THEN 1 WHEN 'in_review' THEN 2 ELSE 3 END, i.created_at DESC"
-    return db.query(sql, tuple(params))
+        q = q.filter(Issue.status == status)
+
+    rows = q.order_by(
+        db.case(
+            (Issue.status == "open", 0),
+            (Issue.status == "claimed", 1),
+            (Issue.status == "in_review", 2),
+            else_=3,
+        ),
+        Issue.created_at.desc(),
+    ).all()
+
+    return [dict(r._mapping) for r in rows]
 
 
 def get_issue(issue_id: int) -> dict | None:
-    return db.query_one(
-        """SELECT i.*, u.full_name AS assignee_name, cu.full_name AS creator_name,
-                  p.name AS project_name, p.slug AS project_slug
-           FROM issues i
-           LEFT JOIN users u ON u.id = i.assigned_to
-           JOIN users cu ON cu.id = i.created_by
-           JOIN projects p ON p.id = i.project_id
-           WHERE i.id = ?""",
-        (issue_id,),
+    Creator = db.aliased(User)
+    Assignee = db.aliased(User)
+
+    row = (
+        db.session.query(
+            Issue.id,
+            Issue.project_id,
+            Issue.title,
+            Issue.description,
+            Issue.status,
+            Issue.difficulty,
+            Issue.created_by,
+            Issue.assigned_to,
+            Issue.created_at,
+            Issue.updated_at,
+            Assignee.full_name.label("assignee_name"),
+            Creator.full_name.label("creator_name"),
+            Project.name.label("project_name"),
+            Project.slug.label("project_slug"),
+        )
+        .join(Creator, Creator.id == Issue.created_by)
+        .outerjoin(Assignee, Assignee.id == Issue.assigned_to)
+        .join(Project, Project.id == Issue.project_id)
+        .filter(Issue.id == issue_id)
+        .first()
     )
+    return dict(row._mapping) if row else None
 
 
 def get_comments(issue_id: int) -> list[dict]:
-    return db.query(
-        """SELECT ic.*, u.full_name FROM issue_comments ic JOIN users u ON u.id = ic.user_id
-           WHERE ic.issue_id = ? ORDER BY ic.created_at ASC""",
-        (issue_id,),
+    rows = (
+        db.session.query(
+            IssueComment.id,
+            IssueComment.issue_id,
+            IssueComment.user_id,
+            IssueComment.body,
+            IssueComment.created_at,
+            User.full_name,
+        )
+        .join(User, User.id == IssueComment.user_id)
+        .filter(IssueComment.issue_id == issue_id)
+        .order_by(IssueComment.created_at.asc())
+        .all()
     )
+    return [dict(r._mapping) for r in rows]
 
 
 def add_comment(issue_id: int, user_id: int, body: str) -> None:
     body = body.strip()
     if not body:
         raise IssueError("Comment cannot be empty.")
-    db.execute("INSERT INTO issue_comments (issue_id, user_id, body) VALUES (?, ?, ?)", (issue_id, user_id, body))
+    comment = IssueComment(issue_id=issue_id, user_id=user_id, body=body)
+    db.session.add(comment)
+    db.session.commit()
 
 
 def claim_issue(issue_id: int, user_id: int) -> None:
-    issue = db.query_one("SELECT * FROM issues WHERE id = ?", (issue_id,))
+    issue = Issue.query.get(issue_id)
     if issue is None:
         raise IssueError("Issue not found.")
-    if issue["status"] != "open":
+    if issue.status != "open":
         raise IssueError("This issue has already been claimed.")
-    db.execute(
-        "UPDATE issues SET status = 'claimed', assigned_to = ?, updated_at = datetime('now') WHERE id = ?",
-        (user_id, issue_id),
-    )
-    events.emit(events.ISSUE_CLAIMED, issue_id=issue_id, project_id=issue["project_id"], claimed_by=user_id, title=issue["title"])
+
+    issue.status = "claimed"
+    issue.assigned_to = user_id
+    issue.updated_at = datetime.now(timezone.utc).isoformat()
+    db.session.commit()
+
+    events.emit(events.ISSUE_CLAIMED, issue_id=issue.id, project_id=issue.project_id, claimed_by=user_id, title=issue.title)
 
 
 def update_status(issue_id: int, status: str, actor_id: int) -> None:
-    issue = db.query_one("SELECT * FROM issues WHERE id = ?", (issue_id,))
+    issue = Issue.query.get(issue_id)
     if issue is None:
         raise IssueError("Issue not found.")
-    db.execute(
-        "UPDATE issues SET status = ?, updated_at = datetime('now') WHERE id = ?", (status, issue_id)
-    )
-    if status in ("done", "closed") and issue["status"] not in ("done", "closed"):
+
+    prev_status = issue.status
+    issue.status = status
+    issue.updated_at = datetime.now(timezone.utc).isoformat()
+    db.session.commit()
+
+    if status in ("done", "closed") and prev_status not in ("done", "closed"):
         events.emit(
-            events.ISSUE_CLOSED, issue_id=issue_id, project_id=issue["project_id"], closed_by=actor_id,
-            title=issue["title"], assigned_to=issue["assigned_to"],
+            events.ISSUE_CLOSED,
+            issue_id=issue.id,
+            project_id=issue.project_id,
+            closed_by=actor_id,
+            title=issue.title,
+            assigned_to=issue.assigned_to,
         )

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Verify Your Email &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="card form-card" style="max-width:540px; margin:40px auto; text-align:center;">
+    <div style="font-size:3rem; margin-bottom:12px;">&#9993;&#65039;</div>
+    <h2>Verify your email address</h2>
+    <p class="muted">
+        We sent a verification link to <strong>{{ email }}</strong>.
+        Please check your inbox and click the verification link to activate your account.
+    </p>
+
+    {% if verify_url %}
+    <div style="margin:24px 0; padding:16px; background:var(--bg-muted, #f8fafc); border-radius:6px; border:1px solid var(--border-color, #e2e8f0); text-align:left;">
+        <p class="small" style="margin-bottom:8px;"><strong>Local / Development Quick Link:</strong></p>
+        <p class="small muted" style="word-break:break-all; margin-bottom:10px;">
+            <a href="{{ verify_url }}">{{ verify_url }}</a>
+        </p>
+        <a href="{{ verify_url }}" class="btn btn-primary btn-sm btn-block">Click here to verify email</a>
+    </div>
+    {% endif %}
+
+    <p class="small muted">
+        Didn't receive the email? Check your spam folder or
+        <a href="{{ url_for('auth.resend_verification') }}">request a new link</a>.
+    </p>
+    <div style="margin-top:20px;">
+        <a href="{{ url_for('auth.login') }}" class="btn btn-ghost btn-sm">&larr; Back to sign in</a>
+    </div>
+</div>
+{% endblock %}

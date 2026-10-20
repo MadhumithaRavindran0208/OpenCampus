@@ -1,0 +1,157 @@
+# ============================================================
+# OpenCampus OSS — docker-compose (development + production)
+# ============================================================
+#
+# Quick-start (SQLite, single node):
+#   docker-compose up app
+#
+# Full stack (Flask + Redis + Celery Worker & Beat + Nginx):
+#   docker-compose --profile full up
+#
+# Complete PostgreSQL cluster with Read Replica:
+#   docker-compose --profile postgres up
+
+version: "3.9"
+
+# ── Named volumes ────────────────────────────────────────────
+volumes:
+  opencampus_data:
+  redis_data:
+  postgres_data:
+  postgres_replica_data:
+
+# ── Services ─────────────────────────────────────────────────
+services:
+
+  # ── Flask Application (Web Server) ─────────────────────────
+  app:
+    build:
+      context: ..
+      target: runtime
+    image: opencampus-oss:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5000}:5000"
+    volumes:
+      - opencampus_data:/app/instance
+    environment:
+      OPENCAMPUS_ENV: ${OPENCAMPUS_ENV:-production}
+      OPENCAMPUS_SECRET_KEY: ${OPENCAMPUS_SECRET_KEY:?Set OPENCAMPUS_SECRET_KEY in your .env}
+      OPENCAMPUS_DATA_DIR: /app/instance
+      PORT: "5000"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_READ_REPLICA_URL: ${DATABASE_READ_REPLICA_URL:-}
+      OPENCAMPUS_USE_CELERY: ${OPENCAMPUS_USE_CELERY:-false}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+      SLO_LATENCY_THRESHOLD_MS: ${SLO_LATENCY_THRESHOLD_MS:-500.0}
+      CDN_BASE_URL: ${CDN_BASE_URL:-}
+      OPENCAMPUS_ENABLE_EMAIL: ${OPENCAMPUS_ENABLE_EMAIL:-false}
+      OPENCAMPUS_SMTP_HOST: ${OPENCAMPUS_SMTP_HOST:-}
+      OPENCAMPUS_SMTP_PORT: ${OPENCAMPUS_SMTP_PORT:-587}
+      OPENCAMPUS_SMTP_USERNAME: ${OPENCAMPUS_SMTP_USERNAME:-}
+      OPENCAMPUS_SMTP_PASSWORD: ${OPENCAMPUS_SMTP_PASSWORD:-}
+      OPENCAMPUS_EMAIL_FROM: ${OPENCAMPUS_EMAIL_FROM:-noreply@opencampus.local}
+      OPENCAMPUS_ALLOW_SIGNUP: ${OPENCAMPUS_ALLOW_SIGNUP:-true}
+      OPENCAMPUS_CLUB_APPROVAL: ${OPENCAMPUS_CLUB_APPROVAL:-false}
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Celery Background Worker ───────────────────────────────
+  celery-worker:
+    profiles: ["full", "celery"]
+    build:
+      context: ..
+      target: runtime
+    image: opencampus-oss:latest
+    restart: unless-stopped
+    command: ["celery", "-A", "app.core.celery_app.celery", "worker", "--loglevel=info", "-c", "4"]
+    volumes:
+      - opencampus_data:/app/instance
+    environment:
+      OPENCAMPUS_ENV: ${OPENCAMPUS_ENV:-production}
+      OPENCAMPUS_SECRET_KEY: ${OPENCAMPUS_SECRET_KEY:?Set OPENCAMPUS_SECRET_KEY in your .env}
+      OPENCAMPUS_DATA_DIR: /app/instance
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+      DATABASE_URL: ${DATABASE_URL:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Celery Beat (Cron Scheduler) ───────────────────────────
+  celery-beat:
+    profiles: ["full", "celery"]
+    build:
+      context: ..
+      target: runtime
+    image: opencampus-oss:latest
+    restart: unless-stopped
+    command: ["celery", "-A", "app.core.celery_app.celery", "beat", "--loglevel=info"]
+    volumes:
+      - opencampus_data:/app/instance
+    environment:
+      OPENCAMPUS_ENV: ${OPENCAMPUS_ENV:-production}
+      OPENCAMPUS_SECRET_KEY: ${OPENCAMPUS_SECRET_KEY:?Set OPENCAMPUS_SECRET_KEY in your .env}
+      OPENCAMPUS_DATA_DIR: /app/instance
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Redis ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── PostgreSQL Primary (Writer) ───────────────────────────
+  postgres:
+    profiles: ["postgres", "full"]
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opencampus
+      POSTGRES_USER: opencampus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opencampus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Nginx reverse proxy ────────────────────────────────────
+  nginx:
+    profiles: ["nginx", "full"]
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      app:
+        condition: service_healthy

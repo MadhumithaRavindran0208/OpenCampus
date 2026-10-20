@@ -14,8 +14,15 @@
             <label for="password">Password</label>
             <input type="password" id="password" name="password" required>
         </div>
+        <div class="form-group">
+            <label for="secret_code">Admin Secret Code <span class="muted" style="font-weight:normal; font-size:0.85em;">(Required for Main Admin & Club Admin)</span></label>
+            <input type="password" id="secret_code" name="secret_code" placeholder="Enter admin secret code">
+        </div>
         <button type="submit" class="btn btn-primary btn-block">Sign in</button>
     </form>
-    <p class="small muted" style="margin-top:16px;">New here? <a href="{{ url_for('auth.register') }}">Create an account</a></p>
+    <p class="small muted" style="margin-top:16px;">
+        New here? <a href="{{ url_for('auth.register') }}">Create an account</a> &middot;
+        <a href="{{ url_for('auth.resend_verification') }}">Resend verification email</a>
+    </p>
 </div>
 {% endblock %}

@@ -169,6 +169,67 @@ class AuthTests(OpenCampusTestCase):
         resp = self.register("agecat4@example.edu", name="Age Cat Four")
         self.assertEqual(resp.status_code, 200)
 
+    def test_gmail_syntax_validation(self):
+        # Valid Gmail format
+        resp = self.register("valid.user.123@gmail.com")
+        self.assertEqual(resp.status_code, 200)
+
+        self.client.get("/auth/logout")
+
+        # Invalid Gmail username: too short (less than 6 chars)
+        resp = self.register("abc@gmail.com")
+        self.assertIn(b"Invalid Gmail username", resp.data)
+
+        # Invalid Gmail username: consecutive periods
+        resp = self.register("john..doe@gmail.com")
+        self.assertIn(b"Invalid Gmail username", resp.data)
+
+        # Invalid Gmail username: starts or ends with a period
+        resp = self.register(".johndoe123@gmail.com")
+        self.assertIn(b"Invalid Gmail username", resp.data)
+
+    def test_email_verification_flow(self):
+        self.app.config["REQUIRE_EMAIL_VERIFICATION"] = True
+        resp = self.register("pending.user.verification@gmail.com", name="Pending Verif")
+        self.assertIn(b"Verify your email address", resp.data)
+
+        # Ensure user cannot log in before verifying
+        self.client.get("/auth/logout")
+        resp_login = self.login("pending.user.verification@gmail.com", password="password123")
+        self.assertIn(b"Please verify your email address", resp_login.data)
+
+        # Fetch verification token from database and verify
+        from app.blueprints.auth.models import User
+        with self.app.app_context():
+            user = User.query.filter_by(email="pending.user.verification@gmail.com").first()
+            token = user.verification_token
+            self.assertTrue(bool(token))
+
+        resp_verify = self.client.get(f"/auth/verify-email/{token}", follow_redirects=True)
+        self.assertIn(b"successfully verified", resp_verify.data)
+
+        # Now login should succeed
+        self.client.get("/auth/logout")
+        resp_login_after = self.login("pending.user.verification@gmail.com", password="password123")
+        self.assertIn(b"Welcome back, Pending Verif", resp_login_after.data)
+
+    def test_college_email_restriction(self):
+        self.app.config["REQUIRE_COLLEGE_EMAIL"] = True
+        self.app.config["REQUIRE_EMAIL_VERIFICATION"] = False
+
+        # Disallowed non-academic domain
+        resp = self.register("user@commercial.com")
+        self.assertIn(b"college or institutional email address", resp.data)
+
+        # Allowed academic domains
+        resp_edu = self.register("student@stanford.edu")
+        self.assertEqual(resp_edu.status_code, 200)
+
+        self.client.get("/auth/logout")
+
+        resp_acin = self.register("student@iitb.ac.in")
+        self.assertEqual(resp_acin.status_code, 200)
+
 
 if __name__ == "__main__":
     import unittest

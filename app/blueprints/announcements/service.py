@@ -1,22 +1,45 @@
+"""
+Announcement service using SQLAlchemy ORM.
+"""
 from __future__ import annotations
 
-from app.core import db, events
+from app.extensions import db
+from app.core import events
+from app.blueprints.announcements.models import Announcement
+from app.blueprints.auth.models import User
+from app.blueprints.clubs.models import Club
 
 
 def list_recent_announcements(limit: int = 20) -> list[dict]:
-    return db.query(
-        """SELECT a.*, u.full_name AS author_name, c.name AS club_name
-           FROM announcements a JOIN users u ON u.id = a.created_by
-           LEFT JOIN clubs c ON c.id = a.club_id
-           ORDER BY a.created_at DESC LIMIT ?""",
-        (limit,),
+    rows = (
+        db.session.query(
+            Announcement.id,
+            Announcement.club_id,
+            Announcement.title,
+            Announcement.body,
+            Announcement.created_by,
+            Announcement.created_at,
+            User.full_name.label("author_name"),
+            Club.name.label("club_name"),
+        )
+        .join(User, User.id == Announcement.created_by)
+        .outerjoin(Club, Club.id == Announcement.club_id)
+        .order_by(Announcement.created_at.desc())
+        .limit(limit)
+        .all()
     )
+    return [dict(r._mapping) for r in rows]
 
 
-def post_announcement(title: str, body: str, created_by: int, club_id: int | None = None) -> dict:
-    ann_id = db.execute(
-        "INSERT INTO announcements (club_id, title, body, created_by) VALUES (?, ?, ?, ?)",
-        (club_id, title.strip(), body.strip(), created_by),
+def post_announcement(title: str, body: str, created_by: int, club_id: int | None = None) -> Announcement:
+    ann = Announcement(
+        club_id=club_id,
+        title=title.strip(),
+        body=body.strip(),
+        created_by=created_by,
     )
-    events.emit(events.ANNOUNCEMENT_POSTED, announcement_id=ann_id, club_id=club_id, title=title)
-    return db.query_one("SELECT * FROM announcements WHERE id = ?", (ann_id,))
+    db.session.add(ann)
+    db.session.commit()
+
+    events.emit(events.ANNOUNCEMENT_POSTED, announcement_id=ann.id, club_id=club_id, title=title)
+    return ann

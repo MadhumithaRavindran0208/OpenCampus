@@ -22,7 +22,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-REQUIRED_PACKAGES = ("flask", "werkzeug", "jinja2", "itsdangerous")
+
+REQUIRED_PACKAGES = (
+    "flask", "werkzeug", "jinja2", "itsdangerous", "markdown",
+    "flask_sqlalchemy", "flask_migrate", "flask_login", "flask_wtf",
+)
 
 
 def _write_startup_crash_report(exc: BaseException, context: str) -> Path:
@@ -99,8 +103,8 @@ def _print_banner(port: int, is_production: bool) -> None:
     mode = "production" if is_production else "development"
     print(f"\nOpenCampus OSS is running at http://localhost:{port} ({mode} mode)")
     print("\nDemo accounts (password: password123):")
-    print("  admin@opencampus.dev          (platform admin)")
-    print("  arjun.k@opencampus.dev        (project owner / club admin)")
+    print("  admin@opencampus.dev          (platform admin -- also needs MAIN_ADMIN_SECRET_CODE from your environment)")
+    print("  arjun.k@opencampus.dev        (club admin -- club secret code: cs_secret_123)")
     print("  mentor.das@opencampus.dev     (mentor)")
     print("  student.meera@opencampus.dev  (student contributor)")
     print("\nPress CTRL+C to stop.\n")

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Resend Verification Email &mdash; OpenCampus OSS{% endblock %}
+{% block content %}
+<div class="card form-card" style="max-width:440px; margin:40px auto;">
+    <h2>Resend Verification Email</h2>
+    <p class="muted small">Enter the email address you used when signing up and we'll send you a new activation link.</p>
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="email">Account Email</label>
+            <input type="email" id="email" name="email" required autofocus placeholder="e.g. username@gmail.com">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Send Verification Link</button>
+    </form>
+    <div style="margin-top:20px; text-align:center;">
+        <a href="{{ url_for('auth.login') }}" class="small muted">&larr; Back to sign in</a>
+    </div>
+</div>
+{% endblock %}

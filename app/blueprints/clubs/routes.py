@@ -43,7 +43,7 @@ def detail(slug: str):
     return render_template("clubs/detail.html", club=club, members=members, projects=projects, is_member=is_member)
 
 
-@bp.route("/<slug>/join", methods=["POST"])
+@bp.route("/<slug>/join", methods=["GET", "POST"])
 @login_required
 def join(slug: str):
     club = service.get_club_by_slug(slug)
@@ -55,3 +55,71 @@ def join(slug: str):
     except service.ClubError as e:
         flash(str(e), "danger")
     return redirect(url_for("clubs.detail", slug=slug))
+
+
+@bp.route("/<slug>/admin")
+@login_required
+def club_admin_dashboard(slug: str):
+    from app.core.security import is_club_admin, is_main_admin
+    club = service.get_club_by_slug(slug)
+    if club is None:
+        abort(404)
+
+    if not (is_main_admin(g.user) or is_club_admin(club["id"], g.user["id"])):
+        abort(403)
+
+    data = service.get_club_admin_dashboard_data(club["id"])
+    from app.blueprints.auth.models import User
+    eligible_admins = User.query.filter_by(is_active=1).all() if is_main_admin(g.user) else []
+    return render_template(
+        "clubs/admin.html",
+        club=data["club"],
+        members=data["members"],
+        projects=data["projects"],
+        pending_tags=data["pending_tags"],
+        eligible_admins=eligible_admins,
+        is_main_admin=is_main_admin(g.user),
+    )
+
+
+@bp.route("/<slug>/admin/secret-code", methods=["POST"])
+@login_required
+def update_secret_code(slug: str):
+    from app.core.security import is_club_admin, is_main_admin
+    club = service.get_club_by_slug(slug)
+    if club is None:
+        abort(404)
+
+    if not (is_main_admin(g.user) or is_club_admin(club["id"], g.user["id"])):
+        abort(403)
+
+    secret_code = request.form.get("secret_code", "")
+    try:
+        service.set_club_secret_code(club["id"], secret_code)
+        flash("Club administrative secret code updated successfully.", "success")
+    except service.ClubError as e:
+        flash(str(e), "danger")
+
+    return redirect(url_for("clubs.club_admin_dashboard", slug=slug))
+
+
+@bp.route("/<slug>/admin/assign-admin", methods=["POST"])
+@login_required
+def assign_admin(slug: str):
+    from app.core.security import is_main_admin
+    if not is_main_admin(g.user):
+        abort(403)
+
+    club = service.get_club_by_slug(slug)
+    if club is None:
+        abort(404)
+
+    admin_user_id = int(request.form.get("admin_user_id", 0))
+    secret_code = request.form.get("secret_code")
+    try:
+        service.set_club_admin(club["id"], admin_user_id, secret_code)
+        flash("Club Admin assigned successfully.", "success")
+    except service.ClubError as e:
+        flash(str(e), "danger")
+
+    return redirect(url_for("clubs.club_admin_dashboard", slug=slug))

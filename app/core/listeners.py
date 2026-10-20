@@ -13,6 +13,7 @@ from flask import current_app
 
 from app.core import db, events, dispatch
 from app.core.utils import notify, notify_bulk, log_contribution
+import app.core.sse as sse_engine
 
 
 def _project_maintainers(project_id: int) -> list[int]:
@@ -43,18 +44,21 @@ def on_issue_created(issue_id: int, project_id: int, created_by: int, title: str
     for uid in _project_maintainers(project_id):
         if uid != created_by:
             notify(uid, f'New issue opened: "{title}"', "issue_created", f"/projects/issue/{issue_id}")
+            sse_engine.push_event(uid, "notification", {"type": "issue_created", "message": f'New issue opened: "{title}"', "link": f"/projects/issue/{issue_id}"})
 
 
 def on_issue_claimed(issue_id: int, project_id: int, claimed_by: int, title: str):
     for uid in _project_maintainers(project_id):
         if uid != claimed_by:
             notify(uid, f'Issue claimed: "{title}"', "issue_claimed", f"/projects/issue/{issue_id}")
+            sse_engine.push_event(uid, "notification", {"type": "issue_claimed", "message": f'Issue claimed: "{title}"', "link": f"/projects/issue/{issue_id}"})
 
 
 def on_issue_closed(issue_id: int, project_id: int, closed_by: int, title: str, assigned_to: int | None):
     if assigned_to:
         log_contribution(assigned_to, "issue_closed", project_id, points=3)
         notify(assigned_to, f'Your issue "{title}" was marked done. Nice work!', "issue_closed", f"/projects/issue/{issue_id}")
+        sse_engine.push_event(assigned_to, "notification", {"type": "issue_closed", "message": f'Your issue "{title}" was marked done. Nice work!', "link": f"/projects/issue/{issue_id}"})
 
 
 def on_document_published(document_id: int, project_id: int, created_by: int, title: str):
@@ -62,28 +66,37 @@ def on_document_published(document_id: int, project_id: int, created_by: int, ti
     for uid in _project_maintainers(project_id):
         if uid != created_by:
             notify(uid, f'New documentation: "{title}"', "document_published", f"/projects/{project_id}/docs")
+            sse_engine.push_event(uid, "notification", {"type": "document_published", "message": f'New documentation: "{title}"', "link": f"/projects/{project_id}/docs"})
 
 
-def on_mentorship_requested(request_id: int, project_id: int, student_id: int):
+def on_mentorship_requested(request_id: int, project_id: int, student_id: int, mentor_id: int | None = None):
     for uid in _project_maintainers(project_id):
         notify(uid, "A student requested mentorship on your project.", "mentorship_requested", "/mentorship/")
+        sse_engine.push_event(uid, "notification", {"type": "mentorship_requested", "message": "A student requested mentorship on your project.", "link": "/mentorship/"})
+    if mentor_id and mentor_id not in _project_maintainers(project_id):
+        notify(mentor_id, "A student requested you as a mentor on a project.", "mentorship_requested", "/mentorship/")
+        sse_engine.push_event(mentor_id, "notification", {"type": "mentorship_requested", "message": "A student requested you as a mentor on a project.", "link": "/mentorship/"})
 
 
 def on_mentorship_accepted(request_id: int, student_id: int, mentor_id: int):
     notify(student_id, "Your mentorship request was accepted!", "mentorship_accepted", "/mentorship/")
+    sse_engine.push_event(student_id, "notification", {"type": "mentorship_accepted", "message": "Your mentorship request was accepted!", "link": "/mentorship/"})
 
 
 def on_mentorship_completed(request_id: int, student_id: int, mentor_id: int):
     log_contribution(mentor_id, "mentorship_completed", points=5)
     notify(student_id, "Your mentorship engagement was marked complete.", "mentorship_completed", "/mentorship/")
+    sse_engine.push_event(student_id, "notification", {"type": "mentorship_completed", "message": "Your mentorship engagement was marked complete.", "link": "/mentorship/"})
 
 
 def on_ownership_transfer_requested(transfer_id: int, project_id: int, from_user_id: int, to_user_id: int):
     notify(to_user_id, "You've been offered ownership of a project.", "ownership_transfer", "/admin/transfers")
+    sse_engine.push_event(to_user_id, "notification", {"type": "ownership_transfer", "message": "You've been offered ownership of a project.", "link": "/admin/transfers"})
 
 
 def on_ownership_transfer_resolved(transfer_id: int, project_id: int, from_user_id: int, status: str):
     notify(from_user_id, f"Your ownership transfer was {status}.", "ownership_transfer", "/admin/transfers")
+    sse_engine.push_event(from_user_id, "notification", {"type": "ownership_transfer", "message": f"Your ownership transfer was {status}.", "link": "/admin/transfers"})
 
 
 def on_announcement_posted(announcement_id: int, club_id: int | None, title: str):
@@ -126,8 +139,11 @@ def on_club_rejected(club_id: int, name: str, created_by: int):
 # slow SMTP server or an unreachable webhook endpoint from ever making
 # a user wait on their click.
 
-def _email_mentorship_requested(project_id: int, student_id: int):
-    for uid in _project_maintainers(project_id):
+def _email_mentorship_requested(project_id: int, student_id: int, mentor_id: int | None = None):
+    targets = set(_project_maintainers(project_id))
+    if mentor_id:
+        targets.add(mentor_id)
+    for uid in targets:
         dispatch.send_email(
             _external_email(uid),
             "New mentorship request on your project",
@@ -136,9 +152,9 @@ def _email_mentorship_requested(project_id: int, student_id: int):
         )
 
 
-def dispatch_email_mentorship_requested(request_id: int, project_id: int, student_id: int):
+def dispatch_email_mentorship_requested(request_id: int, project_id: int, student_id: int, mentor_id: int | None = None):
     app = current_app._get_current_object()
-    dispatch.run_in_background(app, _email_mentorship_requested, project_id, student_id)
+    dispatch.run_in_background(app, _email_mentorship_requested, project_id, student_id, mentor_id)
 
 
 def _email_mentorship_accepted(student_id: int, mentor_id: int):

@@ -22,17 +22,20 @@
                 <a href="{{ url_for('clubs.index') }}">Clubs</a>
                 <a href="{{ url_for('projects.index') }}">Projects</a>
                 <a href="{{ url_for('announcements.index') }}">Announcements</a>
-                {% if current_user %}
+                {% if current_user.is_authenticated %}
                     <a href="{{ url_for('mentorship.index') }}">Mentorship</a>
-                    <a href="{{ url_for('notifications.index') }}" class="notif-link">
+                    <a href="{{ url_for('notifications.index') }}" class="notif-link" id="notif-nav-link">
                         Notifications
-                        {% if unread_notifications %}<span class="badge">{{ unread_notifications }}</span>{% endif %}
+                        {% if unread_notifications %}<span class="badge" id="notif-badge">{{ unread_notifications }}</span>{% else %}<span class="badge" id="notif-badge" style="display:none">0</span>{% endif %}
                     </a>
                     {% if current_user.role == 'platform_admin' %}
                         <a href="{{ url_for('admin.dashboard') }}">Admin</a>
                     {% endif %}
                     <a href="{{ url_for('auth.my_profile') }}">{{ current_user.full_name }}</a>
-                    <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost">Sign out</a>
+                    <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline; margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-ghost" style="padding:4px 10px; font-size:13px;">Sign out</button>
+                    </form>
                 {% else %}
                     <a href="{{ url_for('auth.login') }}">Sign in</a>
                     <a href="{{ url_for('auth.register') }}" class="btn btn-primary">Join</a>
@@ -40,6 +43,9 @@
             </div>
         </div>
     </nav>
+
+    {# Live notification toast container #}
+    <div id="sse-toast-container" style="position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;"></div>
 
     <main class="container page">
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -61,5 +67,75 @@
             <span class="footer-muted">Built for campus technical communities.</span>
         </div>
     </footer>
+
+{% if current_user.is_authenticated %}
+<script>
+/**
+ * SSE client: connects to /sse/events and handles live notifications.
+ * Auto-reconnects with exponential backoff on disconnect.
+ */
+(function () {
+    "use strict";
+
+    if (!window.EventSource) return; // Safari < 10 fallback: silent
+
+    var badge      = document.getElementById("notif-badge");
+    var toastWrap  = document.getElementById("sse-toast-container");
+    var retryDelay = 2000;
+    var maxDelay   = 60000;
+
+    function connect() {
+        var es = new EventSource("{{ url_for('sse.events') }}");
+
+        es.addEventListener("notification", function (e) {
+            try {
+                var payload = JSON.parse(e.data);
+                incrementBadge();
+                showToast(payload.message || "You have a new notification", payload.link);
+            } catch (_) {}
+        });
+
+        es.onerror = function () {
+            es.close();
+            retryDelay = Math.min(retryDelay * 2, maxDelay);
+            setTimeout(connect, retryDelay);
+        };
+
+        es.onopen = function () {
+            retryDelay = 2000; // reset on successful connect
+        };
+    }
+
+    function incrementBadge() {
+        if (!badge) return;
+        var current = parseInt(badge.textContent, 10) || 0;
+        badge.textContent = current + 1;
+        badge.style.display = "";
+    }
+
+    function showToast(message, link) {
+        if (!toastWrap) return;
+        var toast = document.createElement("a");
+        toast.href = link || "{{ url_for('notifications.index') }}";
+        toast.style.cssText = [
+            "display:block", "background:#1e293b", "color:#e2e8f0",
+            "padding:.75rem 1rem", "border-radius:.5rem",
+            "text-decoration:none", "font-size:.875rem",
+            "box-shadow:0 4px 12px rgba(0,0,0,.35)",
+            "max-width:20rem", "border-left:3px solid #6366f1",
+            "transition:opacity .3s"
+        ].join(";");
+        toast.textContent = message;
+        toastWrap.appendChild(toast);
+        setTimeout(function () {
+            toast.style.opacity = "0";
+            setTimeout(function () { toast.remove(); }, 350);
+        }, 5000);
+    }
+
+    connect();
+}());
+</script>
+{% endif %}
 </body>
 </html>

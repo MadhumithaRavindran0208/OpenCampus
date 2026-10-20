@@ -25,9 +25,11 @@ import json
 import logging
 import smtplib
 import threading
+import time
 import urllib.error
 import urllib.request
 from email.mime.text import MIMEText
+from typing import Callable, Any
 
 from flask import current_app
 
@@ -41,6 +43,32 @@ _executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_pre
 
 _pending_lock = threading.Lock()
 _pending_futures: list[concurrent.futures.Future] = []
+
+
+def _with_backoff(func: Callable, *args: Any, max_attempts: int = 3,
+                  base_delay: float = 1.0, **kwargs: Any) -> Any:
+    """Call func(*args, **kwargs) with exponential backoff on failure.
+
+    Attempts: 1 → 2 → 3 with delays 1 s, 2 s (i.e. base_delay × 2^attempt).
+    Raises the last exception if all attempts fail.
+    This keeps external-network calls from hanging a worker indefinitely:
+    each attempt has its own timeout (set inside the called function).
+    """
+    last_exc: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if attempt < max_attempts - 1:
+                delay = base_delay * (2 ** attempt)
+                logger.warning(
+                    "Dispatch attempt %d/%d for %r failed (%s); retrying in %.1fs",
+                    attempt + 1, max_attempts,
+                    getattr(func, "__name__", func), exc, delay,
+                )
+                time.sleep(delay)
+    raise last_exc  # type: ignore[misc]
 
 
 def run_in_background(app, func, *args, **kwargs) -> None:
@@ -86,8 +114,8 @@ def wait_for_pending(timeout: float = 5.0) -> None:
 
 
 def send_email(to_addr: str | None, subject: str, body: str) -> bool:
-    """Best-effort email send. Returns False (and logs) on any failure
-    or if email dispatch isn't configured/enabled -- never raises."""
+    """Best-effort email send with up to 3 attempts and exponential backoff.
+    Routes to Celery if USE_CELERY is configured, otherwise runs in local thread pool."""
     if not to_addr:
         return False
     cfg = current_app.config
@@ -95,36 +123,72 @@ def send_email(to_addr: str | None, subject: str, body: str) -> bool:
         current_app.logger.info("[email dispatch disabled] would send to %s: %s", to_addr, subject)
         return False
 
+    # Check for Celery delegation
+    if cfg.get("USE_CELERY", False):
+        try:
+            from app.core.celery_app import send_email_task, celery
+            if celery is not None:
+                send_email_task.delay(
+                    to_addr=to_addr,
+                    subject=subject,
+                    body=body,
+                    smtp_host=cfg["SMTP_HOST"],
+                    smtp_port=cfg.get("SMTP_PORT", 587),
+                    smtp_user=cfg.get("SMTP_USERNAME", ""),
+                    smtp_pass=cfg.get("SMTP_PASSWORD", ""),
+                    from_addr=cfg.get("EMAIL_FROM", "noreply@opencampus.local"),
+                )
+                return True
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.warning("Celery enqueue failed (%s); using thread pool fallback", exc)
+
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = cfg.get("EMAIL_FROM", "noreply@opencampus.local")
     msg["To"] = to_addr
 
-    try:
-        with smtplib.SMTP(cfg["SMTP_HOST"], cfg.get("SMTP_PORT", 587), timeout=5) as server:
+    def _attempt():
+        with smtplib.SMTP(cfg["SMTP_HOST"], cfg.get("SMTP_PORT", 587), timeout=10) as server:
             server.starttls()
             if cfg.get("SMTP_USERNAME"):
                 server.login(cfg["SMTP_USERNAME"], cfg.get("SMTP_PASSWORD", ""))
             server.send_message(msg)
+
+    try:
+        _with_backoff(_attempt)
         return True
-    except Exception as exc:  # noqa: BLE001 -- deliberately broad: never let dispatch break the request
-        current_app.logger.warning("Email dispatch to %s failed: %s", to_addr, exc)
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning("Email dispatch to %s failed after retries: %s", to_addr, exc)
         return False
 
 
 def send_webhook(event_name: str, payload: dict) -> bool:
-    """Best-effort webhook POST of {event, data}. Returns False (and
-    logs) on any failure or if webhook dispatch isn't configured/enabled."""
+    """Best-effort webhook POST with exponential backoff.
+    Routes to Celery if USE_CELERY is configured, otherwise runs in local thread pool."""
     cfg = current_app.config
     url = cfg.get("WEBHOOK_URL")
     if not cfg.get("ENABLE_WEBHOOK_NOTIFICATIONS") or not url:
         return False
 
+    # Check for Celery delegation
+    if cfg.get("USE_CELERY", False):
+        try:
+            from app.core.celery_app import send_webhook_task, celery
+            if celery is not None:
+                send_webhook_task.delay(url, event_name, payload)
+                return True
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.warning("Celery enqueue failed (%s); using thread pool fallback", exc)
+
     body = json.dumps({"event": event_name, "data": payload}, default=str).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+
+    def _attempt():
+        urllib.request.urlopen(req, timeout=10)
+
     try:
-        urllib.request.urlopen(req, timeout=5)
+        _with_backoff(_attempt)
         return True
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        current_app.logger.warning("Webhook dispatch for %s failed: %s", event_name, exc)
-        return False
+        current_app.logger.warning("Webhook dispatch for %s failed after retries: %s", event_name, exc)
+        return False

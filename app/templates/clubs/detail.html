@@ -11,13 +11,15 @@
         <h1>{{ club.name }}</h1>
         <p class="muted">{{ club.description }}</p>
     </div>
-    {% if current_user and not is_member %}
+    {% if current_user.is_authenticated and not is_member %}
     <form method="post" action="{{ url_for('clubs.join', slug=club.slug) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary">Join club</button>
     </form>
     {% elif is_member %}
         <span class="pill pill-success">Member</span>
+    {% elif not current_user.is_authenticated %}
+        <a href="{{ url_for('auth.login', next=url_for('clubs.join', slug=club.slug)) }}" class="btn btn-primary">Join club</a>
     {% endif %}
 </div>
 

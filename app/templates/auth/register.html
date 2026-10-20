@@ -5,6 +5,7 @@
     <h1>Create your account</h1>
     <p class="muted small">Join as a student contributor or a mentor. Club and platform admin roles are granted by an administrator.</p>
     <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label for="full_name">Full name</label>
             <input type="text" id="full_name" name="full_name" value="{{ form.get('full_name', '') }}" required autofocus>

@@ -23,12 +23,25 @@ def request_mentorship(slug: str):
     project = projects_service.get_project_by_slug(slug)
     if project is None:
         abort(404)
+    mentor_id_raw = request.form.get("mentor_id")
+    mentor_id = int(mentor_id_raw) if mentor_id_raw and mentor_id_raw.isdigit() else None
     try:
-        service.request_mentorship(project["id"], g.user["id"], request.form.get("message", ""))
+        service.request_mentorship(project["id"], g.user["id"], request.form.get("message", ""), mentor_id=mentor_id)
         flash("Mentorship requested. A maintainer or mentor will follow up.", "success")
     except service.MentorshipError as e:
         flash(str(e), "danger")
     return redirect(url_for("projects.detail", slug=slug))
+
+
+@bp.route("/<int:request_id>/cancel", methods=["POST"])
+@login_required
+def cancel(request_id: int):
+    try:
+        service.cancel_request(request_id, g.user["id"])
+        flash("Mentorship request cancelled.", "info")
+    except service.MentorshipError as e:
+        flash(str(e), "danger")
+    return redirect(url_for("mentorship.index"))
 
 
 @bp.route("/<int:request_id>/accept", methods=["POST"])

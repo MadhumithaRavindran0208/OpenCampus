@@ -1,0 +1,4 @@
+# Attributes for export archives (git archive)
+.gitattributes export-ignore
+.gitignore export-ignore
+.github export-ignore
